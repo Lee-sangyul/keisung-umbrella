@@ -77,6 +77,20 @@
 .pin-approval-verified input{width:18px;height:18px;accent-color:#ff6541}
 .pending-count{display:inline-grid;place-items:center;min-width:23px;height:22px;padding:0 5px;border-radius:12px;background:#fff1e9;color:#b63b22;font-size:12px;font-weight:900}
 @media(max-width:780px){.pin-approval-tools{min-width:240px}}
+.stocktake-fields{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:14px 0}
+.stocktake-fields .field{flex:1 1 190px;max-width:360px}
+.stocktake-fields button{min-height:44px}
+#stocktakeBatch{width:100%;min-height:110px;resize:vertical}
+.stocktake-progress{display:flex;gap:13px;flex-wrap:wrap;margin:16px 0 22px}
+.stocktake-metric{border:1px solid #eceef2;border-radius:12px;background:#fbfcfd;padding:13px 20px;font-size:13px;font-weight:800;color:#687084}
+.stocktake-metric strong{display:block;font-size:26px;color:#2b3141;margin-top:5px}
+.stocktake-result-columns{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px;margin-top:20px}
+.stocktake-result-columns h3{font-size:16px;margin:12px 0 0}
+.stocktake-id-list{max-height:270px;overflow:auto;border:1px solid #eceef2;background:#fafbfc;border-radius:10px;padding:13px;line-height:2;overflow-wrap:anywhere}
+.stocktake-id-chip{display:inline-block;background:white;border:1px solid #e4e7ed;border-radius:8px;margin:3px;padding:2px 8px;font-size:12px;font-weight:850}
+.stocktake-camera{background:#f8fafc;border:1px solid #ddd;border-radius:13px;padding:14px;max-width:520px}
+.stocktake-camera video{width:100%;max-height:300px;object-fit:contain;background:#18212b;border-radius:9px}
+@media(max-width:700px){.stocktake-result-columns{grid-template-columns:1fr}.stocktake-fields .field{max-width:none}}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -91,6 +105,7 @@
     <div><p class="side-label">MANAGEMENT</p><nav class="nav" aria-label="관리 메뉴">
       <button type="button" data-tab="dashboard" class="active"><span>▦</span> 대시보드</button>
       <button type="button" data-tab="inventory"><span>▤</span> 우산 관리</button>
+      <button type="button" data-tab="stocktake"><span>☷</span> 재고 실사</button>
       <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
       <button type="button" data-tab="studentPolicy"><span>♧</span> 학생·패널티 관리</button>
        <button type="button" data-tab="pinApprovals"><span>✓</span> PIN 등록 승인 <span id="pinPendingCount" class="pending-count hide">0</span></button>
@@ -137,7 +152,59 @@
         <div class="actions"><button class="btn danger" id="change">상태 변경 확인</button></div><p class="helper">폐기는 되돌릴 수 없습니다. 분실 또는 파손 상태의 우산만 대여 가능 상태로 복구할 수 있습니다.</p><div id="adminMsg" class="msg hide" role="status"></div>
       </section>
     </div>
-    <div id="history" class="tab">
+    <div id="stocktake" class="tab">
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">보관 위치 일괄 지정</h2>
+      <p class="subtext">등록된 우산 ID 범위(최대 500개)의 보관 위치를 설정합니다. 다른 우산 상태는 변경되지 않습니다.</p></div></div>
+    <div class="stocktake-fields">
+      <div class="field"><label for="stocktakeRangeStart">시작 우산 ID</label><input class="input" id="stocktakeRangeStart" placeholder="UMB-0001" autocomplete="off"></div>
+      <div class="field"><label for="stocktakeRangeEnd">끝 우산 ID</label><input class="input" id="stocktakeRangeEnd" placeholder="UMB-0500" autocomplete="off"></div>
+      <div class="field"><label for="stocktakeLocationName">보관 위치명</label><input class="input" id="stocktakeLocationName" maxlength="50" placeholder="예: 본관 1층"></div>
+      <button type="button" class="btn" id="stocktakeAssignLocation">위치 지정</button>
+    </div>
+    <p class="helper">기존 우산은 기본적으로 ‘미지정’ 위치입니다. 장소별 실사는 우산의 위치를 먼저 지정해야 정확한 미확인 목록을 만들 수 있어요.</p>
+  </section>
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">새 재고 실사 시작</h2><p class="subtext">실사 시작 시점의 대여 가능·파손 우산을 확인 대상에 고정합니다. 대여 중·분실·폐기 우산은 제외합니다.</p></div></div>
+    <div class="stocktake-fields">
+      <div class="field"><label for="stocktakeTitle">실사 이름</label><input class="input" id="stocktakeTitle" maxlength="80" placeholder="예: 11월 정기 실사"></div>
+      <div class="field"><label for="stocktakeLocation">실사 범위</label><select id="stocktakeLocation" class="input"></select></div>
+      <button type="button" class="btn primary" id="stocktakeCreate">실사 시작</button>
+    </div>
+    <p class="helper">실사는 시스템상의 우산 상태를 자동 변경하지 않습니다. 미확인 우산은 실제 대여 기록과 위치를 확인한 후 관리자가 따로 처리해야 해요.</p>
+    <div id="stocktakeMessage" class="msg hide" role="status" aria-live="polite"></div>
+  </section>
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">실사 기록</h2><p class="subtext">최근 100개 실사를 선택해 진행하거나 결과를 확인합니다.</p></div>
+      <button type="button" id="stocktakeRefresh" class="btn">↻ 새로고침</button></div>
+    <div class="tablewrap"><table><thead><tr><th>실사</th><th>범위</th><th>상태</th><th>확인 / 대상</th><th>보기</th></tr></thead><tbody id="stocktakeSessionRows"></tbody></table></div>
+  </section>
+  <section class="panel hide" id="stocktakeActivePanel">
+    <div class="head"><div><h2 id="stocktakeActiveTitle" class="section-title">진행 중인 실사</h2>
+      <p id="stocktakeActiveDescription" class="subtext"></p></div>
+      <div class="actions" style="margin:0"><button type="button" id="stocktakeExport" class="btn">↓ 결과 CSV</button><button type="button" id="stocktakeComplete" class="btn primary">실사 완료</button></div></div>
+    <div id="stocktakeProgress" class="stocktake-progress" role="status" aria-live="polite"></div>
+    <div id="stocktakeScanControls">
+      <div class="stocktake-fields">
+        <div class="field"><label for="stocktakeSingle">우산 번호 또는 QR 결과</label><input id="stocktakeSingle" class="input" autocomplete="off" placeholder="UMB-0001 또는 1"></div>
+        <button type="button" id="stocktakeScanOne" class="btn primary">1개 확인</button>
+        <button type="button" id="stocktakeCameraToggle" class="btn">QR 카메라 켜기</button>
+      </div>
+      <div class="stocktake-camera hide" id="stocktakeCameraBox">
+        <video id="stocktakeVideo" playsinline autoplay muted></video>
+        <p class="helper">QR이 인식되면 자동으로 확인합니다. 카메라는 HTTPS 또는 localhost에서만 열 수 있어요.</p>
+      </div>
+      <div class="field" style="margin-top:15px"><label for="stocktakeBatch">여러 번호 한 번에 입력 (최대 500개, 공백·줄바꿈·쉼표 구분)</label>
+        <textarea id="stocktakeBatch" rows="4" class="input" placeholder="UMB-0001, UMB-0002&#10;UMB-0003"></textarea></div>
+      <div class="actions"><button type="button" id="stocktakeScanBatch" class="btn">번호 일괄 확인</button></div>
+    </div>
+    <div class="stocktake-result-columns">
+      <div><h3>미확인 우산</h3><p class="helper">실사 시작 시점의 확인 대상 중 아직 스캔하지 않은 우산입니다.</p><div id="stocktakeMissing" class="stocktake-id-list"></div></div>
+      <div><h3>대상 외 확인 우산</h3><p class="helper">다른 위치 또는 대여·분실·폐기 상태 등으로 대상에 없던 우산입니다.</p><div id="stocktakeUnexpected" class="stocktake-id-list"></div></div>
+    </div>
+  </section>
+</div>
+<div id="history" class="tab">
       <section class="panel"><div class="head"><div><h2 class="section-title">이벤트 기록</h2><p class="subtext">대여, 반납 및 관리자 변경 내역 (최근 1,000건)</p></div><button class="btn" id="download">↓ JSON 백업</button></div>
        <div class="searchline"><input class="input search" id="eventSearch" placeholder="우산·학생·담당자 검색"><select id="eventFilter" aria-label="이벤트 유형"><option value="">모든 이벤트</option><option value="BORROW">대여</option><option value="RETURN">반납</option><option value="REGISTER">등록</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="RESTORE">복구</option></select></div>
        <div class="tablewrap"><table><thead><tr><th>처리 시간</th><th>우산 ID</th><th>이벤트</th><th>학생</th><th>담당자</th><th>사유</th></tr></thead><tbody id="eventRows"></tbody></table></div>
@@ -220,7 +287,7 @@ const $=id=>document.getElementById(id);
 const N={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
 const A={REGISTER:"신규 등록",BORROW:"대여",RETURN:"반납",LOST:"분실 처리",DAMAGED:"파손 처리",DISPOSED:"폐기 처리",RESTORE:"복구"};
 const colors={AVAILABLE:"#31b17c",BORROWED:"#5287ee",LOST:"#ef6a74",DAMAGED:"#e6b44e",DISPOSED:"#a6aab4"};
-const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."],pinApprovals:["PIN 등록 승인","학생의 최초 PIN 등록 신청을 확인하고 승인합니다."]};
+const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."],pinApprovals:["PIN 등록 승인","학생의 최초 PIN 등록 신청을 확인하고 승인합니다."],stocktake:["재고 실사","학교 전체 또는 위치별 우산 수량을 확인합니다."]};
 let csrf="",currentUser="",inventory=[],events=[],busy=false;
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function api(path,{method="GET",body,auth=false}={}){
@@ -232,10 +299,11 @@ async function api(path,{method="GET",body,auth=false}={}){
 }
 function message(msg,error=false){$("adminMsg").textContent=msg;$("adminMsg").className="msg"+(error?" error":"");}
 function show(logged){$("loginScreen").classList.toggle("hide",logged);$("app").classList.toggle("hide",!logged);if(logged)$("who").textContent="● "+currentUser;}
-function changeTab(tab){for(const el of document.querySelectorAll(".tab"))el.classList.toggle("active",el.id===tab);for(const btn of document.querySelectorAll("[data-tab]"))btn.classList.toggle("active",btn.dataset.tab===tab);$("pageTitle").textContent=titles[tab][0];$("pageSubtitle").textContent=titles[tab][1];}
+function changeTab(tab){if(tab!=="stocktake")stopStocktakeCamera();for(const el of document.querySelectorAll(".tab"))el.classList.toggle("active",el.id===tab);for(const btn of document.querySelectorAll("[data-tab]"))btn.classList.toggle("active",btn.dataset.tab===tab);$("pageTitle").textContent=titles[tab][0];$("pageSubtitle").textContent=titles[tab][1];}
 for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>{
  changeTab(b.dataset.tab);
  if(b.dataset.tab==="pinApprovals")loadPinRequests();
+ if(b.dataset.tab==="stocktake"){renderStocktakeLocations();loadStocktakes();}
 };
 for(const b of document.querySelectorAll("[data-go]"))b.onclick=()=>changeTab(b.dataset.go);
 function pill(status){return '<span class="pill '+status+'">'+(N[status]||esc(status))+"</span>";}
@@ -268,6 +336,7 @@ function renderEvents(){
 async function refresh(){
  const [i,e]=await Promise.all([api("/api/admin/inventory"),api("/api/admin/events")]);
  inventory=i;events=e;renderStats();renderInventory();renderEvents();
+ renderStocktakeLocations();
  await loadPinRequests();
  $("penaltyUmbrella").innerHTML='<option value="">미지정</option>'+inventory.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.id)+' · '+N[x.status]+'</option>').join("");
 }
@@ -283,7 +352,7 @@ $("loginForm").onsubmit=async ev=>{
 };
 $("logout").onclick=async()=>{
  try{await api("/api/admin/logout",{method:"POST",auth:true});}catch(e){console.warn(e);}
- csrf="";inventory=[];events=[];$("studentPinOutput").textContent="";$("pinPendingCount").classList.add("hide");show(false);
+ stopStocktakeCamera();stocktakeCurrentId=null;csrf="";inventory=[];events=[];$("studentPinOutput").textContent="";$("pinPendingCount").classList.add("hide");$("stocktakeActivePanel").classList.add("hide");show(false);
 };
 $("refresh").onclick=async()=>{try{await refresh();}catch(e){alert("새로고침 실패: "+e.message);}};
 // Student lookup uses admin-authenticated inventory data only.
