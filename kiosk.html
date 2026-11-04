@@ -398,7 +398,15 @@ async function continueAfterStudent(){
   $("studentPin").value="";
   $("newStudentPin").value="";
   $("confirmStudentPin").value="";
-  show(record.has_pin?3:2);
+  if(!record.has_pin){
+     const config=await api("/api/config");
+     if(!config.self_enrollment){
+       modalError("PIN 발급이 필요해요","처음 이용한다면 담당 선생님에게 신원 확인 후 PIN을 발급받으세요.");
+       $("next").disabled=false;
+       return;
+     }
+   }
+   show(record.has_pin?3:2);
  }catch(error){
   modalError("학생 정보 확인 실패",error.message+"\n다시 시도해 주세요.");
   $("next").disabled=false;
