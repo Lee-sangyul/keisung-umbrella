@@ -1,5 +1,6 @@
 """Keisung Umbrella server MVP: FastAPI + SQLite, admin session login."""
 import hashlib
+import csv
 import io
 import hmac
 import json
@@ -131,6 +132,35 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS pin_review_student_idx
             ON student_pin_review_log(student_id,id);
+        CREATE TABLE IF NOT EXISTS umbrella_locations (
+            umbrella_id INTEGER PRIMARY KEY REFERENCES umbrellas(id),
+            location TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS umbrella_location_idx
+            ON umbrella_locations(location,umbrella_id);
+        CREATE TABLE IF NOT EXISTS stocktake_sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            location TEXT NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('OPEN','COMPLETED')),
+            created_at TEXT NOT NULL,
+            created_by TEXT NOT NULL,
+            completed_at TEXT,
+            completed_by TEXT
+        );
+        CREATE TABLE IF NOT EXISTS stocktake_items (
+            session_id INTEGER NOT NULL REFERENCES stocktake_sessions(id),
+            umbrella_id INTEGER NOT NULL REFERENCES umbrellas(id),
+            expected INTEGER NOT NULL CHECK(expected IN (0,1)),
+            snapshot_status TEXT NOT NULL,
+            seen_at TEXT,
+            seen_by TEXT,
+            PRIMARY KEY(session_id,umbrella_id)
+        );
+        CREATE INDEX IF NOT EXISTS stocktake_item_session_idx
+            ON stocktake_items(session_id,expected,seen_at);
         CREATE TABLE IF NOT EXISTS policies (
             key TEXT PRIMARY KEY,
             value INTEGER NOT NULL
@@ -863,14 +893,236 @@ def change_state(umbrella_id: str, data: StatusRequest, request: Request):
 
 
 
+
+class InventoryLocationRange(BaseModel):
+    start_id: str
+    end_id: str
+    location: str = Field(min_length=1,max_length=50)
+
+
+class StocktakeCreateRequest(BaseModel):
+    title: str = Field(min_length=3,max_length=80)
+    location: str = Field(default="ALL",min_length=1,max_length=50)
+
+
+class StocktakeScanBatch(BaseModel):
+    umbrella_ids: list[str] = Field(min_length=1,max_length=500)
+
+
+def clean_location(value: str,allow_all: bool=False) -> str:
+    location=value.strip()
+    if not location or len(location)>50 or any(ch in location for ch in "\\r\\n\\t"):
+        raise HTTPException(422,"보관 위치를 1~50자로 입력해 주세요.")
+    if location == "ALL" and not allow_all:
+        raise HTTPException(422,"ALL은 학교 전체 실사 전용으로 예약된 위치명입니다.")
+    return location
+
+
+def stocktake_summary(c,session_id: int):
+    row=c.execute(
+        """SELECT s.id,s.title,s.location,s.status,s.created_at,s.created_by,
+                  s.completed_at,s.completed_by,
+                  COUNT(i.umbrella_id) AS recorded,
+                  COALESCE(SUM(CASE WHEN i.expected=1 THEN 1 ELSE 0 END),0) AS expected,
+                  COALESCE(SUM(CASE WHEN i.expected=1 AND i.seen_at IS NOT NULL THEN 1 ELSE 0 END),0) AS verified,
+                  COALESCE(SUM(CASE WHEN i.expected=0 AND i.seen_at IS NOT NULL THEN 1 ELSE 0 END),0) AS unexpected
+           FROM stocktake_sessions s
+           LEFT JOIN stocktake_items i ON i.session_id=s.id
+           WHERE s.id=?
+           GROUP BY s.id""",(session_id,)
+    ).fetchone()
+    if not row:
+        raise HTTPException(404,"해당 실사 기록을 찾을 수 없습니다.")
+    result=dict(row)
+    result["missing"]=result["expected"]-result["verified"]
+    return result
+
+
+@app.put("/api/admin/inventory/locations")
+def assign_inventory_location(data: InventoryLocationRange,request: Request):
+    """Assign up to 500 consecutive registered umbrellas to a storage location."""
+    actor=require_admin(request,csrf=True)
+    location=clean_location(data.location)
+    first,last=parse_id(data.start_id),parse_id(data.end_id)
+    if first>last or last-first+1>500:
+        raise HTTPException(422,"시작/끝 ID의 순서와 500개 이하의 범위를 확인해 주세요.")
+    with transaction() as c:
+        count=c.execute("SELECT COUNT(*) FROM umbrellas WHERE id BETWEEN ? AND ?",
+                        (first,last)).fetchone()[0]
+        if count!=last-first+1:
+            raise HTTPException(404,"지정 범위에 등록되지 않은 우산 ID가 있습니다.")
+        c.executemany(
+            """INSERT INTO umbrella_locations(umbrella_id,location,updated_at,updated_by)
+               VALUES(?,?,?,?)
+               ON CONFLICT(umbrella_id) DO UPDATE SET
+                 location=excluded.location,updated_at=excluded.updated_at,updated_by=excluded.updated_by""",
+            [(num,location,now(),actor) for num in range(first,last+1)]
+        )
+    return {"ok":True,"count":count,"location":location,
+            "first_id":uid(first),"last_id":uid(last)}
+
+
+@app.get("/api/admin/stocktakes")
+def list_stocktakes(request: Request):
+    require_admin(request)
+    with connect() as c:
+        ids=c.execute("SELECT id FROM stocktake_sessions ORDER BY id DESC LIMIT 100").fetchall()
+        rows=[stocktake_summary(c,row["id"]) for row in ids]
+    return {"sessions":rows}
+
+
+@app.post("/api/admin/stocktakes")
+def create_stocktake(data: StocktakeCreateRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    title=data.title.strip()
+    location=clean_location(data.location,allow_all=True)
+    if len(title)<3:
+        raise HTTPException(422,"실사 이름을 3자 이상 입력해 주세요.")
+    with transaction() as c:
+        if location!="ALL" and location!="미지정":
+            exists=c.execute("SELECT 1 FROM umbrella_locations WHERE location=? LIMIT 1",
+                             (location,)).fetchone()
+            if not exists:
+                raise HTTPException(422,"해당 보관 위치에 배정된 우산이 없습니다.")
+        cur=c.execute(
+            """INSERT INTO stocktake_sessions(title,location,status,created_at,created_by)
+               VALUES(?,?,'OPEN',?,?)""",(title,location,now(),actor)
+        )
+        session_id=cur.lastrowid
+        c.execute(
+            """INSERT INTO stocktake_items(session_id,umbrella_id,expected,snapshot_status)
+               SELECT ?,u.id,1,u.status FROM umbrellas u
+               LEFT JOIN umbrella_locations loc ON loc.umbrella_id=u.id
+               WHERE u.status IN ('AVAILABLE','DAMAGED')
+                 AND (?='ALL' OR COALESCE(loc.location,'미지정')=?)""",
+            (session_id,location,location)
+        )
+        result=stocktake_summary(c,session_id)
+    return {"ok":True,"session":result}
+
+
+@app.get("/api/admin/stocktakes/{session_id}")
+def get_stocktake(session_id: int,request: Request):
+    require_admin(request)
+    with connect() as c:
+        summary=stocktake_summary(c,session_id)
+        items=c.execute(
+            """SELECT i.umbrella_id,i.expected,i.snapshot_status,i.seen_at,i.seen_by,
+                      u.status AS current_status,
+                      COALESCE(loc.location,'미지정') AS current_location
+               FROM stocktake_items i
+               JOIN umbrellas u ON u.id=i.umbrella_id
+               LEFT JOIN umbrella_locations loc ON loc.umbrella_id=i.umbrella_id
+               WHERE i.session_id=?
+               ORDER BY i.expected DESC,i.umbrella_id ASC""",
+            (session_id,)
+        ).fetchall()
+    return {"session":summary,"items":[{**dict(i),"umbrella_id":uid(i["umbrella_id"])}
+                                         for i in items]}
+
+
+@app.post("/api/admin/stocktakes/{session_id}/scan-batch")
+def scan_stocktake_batch(session_id: int,data: StocktakeScanBatch,request: Request):
+    actor=require_admin(request,csrf=True)
+    numbers=[parse_id(value) for value in data.umbrella_ids]
+    with transaction() as c:
+        sess=c.execute("SELECT status FROM stocktake_sessions WHERE id=?",
+                       (session_id,)).fetchone()
+        if not sess:
+            raise HTTPException(404,"실사 세션을 찾을 수 없습니다.")
+        if sess["status"]!="OPEN":
+            raise HTTPException(409,"완료된 실사에는 번호를 추가할 수 없습니다.")
+        results=[]
+        for num in numbers:
+            row=c.execute("SELECT status FROM umbrellas WHERE id=?",(num,)).fetchone()
+            if not row:
+                results.append({"id":uid(num),"result":"UNREGISTERED"})
+                continue
+            existing=c.execute(
+                "SELECT expected,seen_at FROM stocktake_items WHERE session_id=? AND umbrella_id=?",
+                (session_id,num)
+            ).fetchone()
+            if existing:
+                if existing["seen_at"]:
+                    results.append({"id":uid(num),"result":"DUPLICATE"})
+                    continue
+                c.execute(
+                    "UPDATE stocktake_items SET seen_at=?,seen_by=? WHERE session_id=? AND umbrella_id=?",
+                    (now(),actor,session_id,num)
+                )
+                results.append({"id":uid(num),"result":"VERIFIED" if existing["expected"] else "OUT_OF_SCOPE"})
+            else:
+                c.execute(
+                    """INSERT INTO stocktake_items
+                       (session_id,umbrella_id,expected,snapshot_status,seen_at,seen_by)
+                       VALUES(?,?,0,?,?,?)""",
+                    (session_id,num,row["status"],now(),actor)
+                )
+                results.append({"id":uid(num),"result":"OUT_OF_SCOPE"})
+        summary=stocktake_summary(c,session_id)
+    return {"ok":True,"results":results,"session":summary}
+
+
+@app.post("/api/admin/stocktakes/{session_id}/complete")
+def complete_stocktake(session_id: int,request: Request):
+    actor=require_admin(request,csrf=True)
+    with transaction() as c:
+        cur=c.execute(
+            """UPDATE stocktake_sessions SET status='COMPLETED',completed_at=?,completed_by=?
+               WHERE id=? AND status='OPEN'""",
+            (now(),actor,session_id)
+        )
+        if cur.rowcount!=1:
+            raise HTTPException(409,"진행 중인 실사 세션이 아니거나 존재하지 않습니다.")
+        result=stocktake_summary(c,session_id)
+    return {"ok":True,"session":result}
+
+
+@app.get("/api/admin/stocktakes/{session_id}/export")
+def export_stocktake_csv(session_id: int,request: Request):
+    """CSV only contains umbrella IDs, not student data or PINs."""
+    require_admin(request)
+    with connect() as c:
+        summary=stocktake_summary(c,session_id)
+        items=c.execute(
+            """SELECT i.umbrella_id,i.expected,i.snapshot_status,i.seen_at,
+                      u.status AS current_status,
+                      COALESCE(loc.location,'미지정') AS current_location
+               FROM stocktake_items i
+               JOIN umbrellas u ON u.id=i.umbrella_id
+               LEFT JOIN umbrella_locations loc ON loc.umbrella_id=i.umbrella_id
+               WHERE i.session_id=? ORDER BY i.umbrella_id""",(session_id,)
+        ).fetchall()
+    out=io.StringIO()
+    writer=csv.writer(out)
+    writer.writerow(["umbrella_id","audit_result","snapshot_status",
+                     "current_status","current_location","seen_at"])
+    for item in items:
+        audit_result=("VERIFIED" if item["seen_at"] else "MISSING") if item["expected"] else "OUT_OF_SCOPE"
+        # Avoid spreadsheet formula interpretation from operator-provided location text.
+        loc=item["current_location"]
+        if loc and loc[0] in "=+-@":
+            loc="'"+loc
+        writer.writerow([uid(item["umbrella_id"]),audit_result,item["snapshot_status"],
+                         item["current_status"],loc,item["seen_at"] or ""])
+    return Response("\\ufeff"+out.getvalue(),media_type="text/csv; charset=utf-8",
+                    headers={"Cache-Control":"no-store",
+                             "Content-Disposition":f'attachment; filename="stocktake-{summary["id"]}.csv"'})
+
+
 @app.get("/api/admin/inventory")
 def admin_inventory(request: Request):
     """Private inventory view. Student identifiers never appear in the public list."""
     require_admin(request)
     with connect() as c:
-        rows = c.execute("SELECT id,status,borrower,rental_id FROM umbrellas ORDER BY id DESC").fetchall()
+        rows = c.execute(
+            """SELECT u.id,u.status,u.borrower,u.rental_id,
+                      COALESCE(loc.location,'미지정') AS location
+               FROM umbrellas u LEFT JOIN umbrella_locations loc
+               ON loc.umbrella_id=u.id ORDER BY u.id DESC"""
+        ).fetchall()
     return [{"id": uid(r["id"]), "status": r["status"], "borrower": r["borrower"],
-             "rental_id": r["rental_id"]} for r in rows]
+             "rental_id": r["rental_id"],"location":r["location"]} for r in rows]
 
 
 class QRLabelRequest(BaseModel):
@@ -935,8 +1187,11 @@ def export(request: Request):
                FROM student_pin_approvals ORDER BY student_id"""
         ).fetchall()
         pin_reviews = c.execute("SELECT * FROM student_pin_review_log ORDER BY id").fetchall()
+        stocktake_sessions = c.execute("SELECT * FROM stocktake_sessions ORDER BY id").fetchall()
+        stocktake_items = c.execute("SELECT * FROM stocktake_items ORDER BY session_id,umbrella_id").fetchall()
+        umbrella_locations = c.execute("SELECT * FROM umbrella_locations ORDER BY umbrella_id").fetchall()
     payload = {
-        "schema_version":"3.1",
+        "schema_version":"3.2",
         "exported_at":now(),
         "umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],
         "events":[dict(e) for e in events],
@@ -944,7 +1199,10 @@ def export(request: Request):
         "student_allowances":[dict(a) for a in allowances],
         "penalty_actions":[dict(p) for p in penalties],
         "student_pin_approvals":[dict(a) for a in pin_approvals],
-        "student_pin_review_log":[dict(r) for r in pin_reviews]
+        "student_pin_review_log":[dict(r) for r in pin_reviews],
+        "umbrella_locations":[dict(loc) for loc in umbrella_locations],
+        "stocktake_sessions":[dict(sess) for sess in stocktake_sessions],
+        "stocktake_items":[dict(item) for item in stocktake_items]
     }
     return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="umbrella-backup.json"', "Cache-Control":"no-store"})
