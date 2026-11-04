@@ -90,6 +90,18 @@
 .rental-due-stats strong{font-size:26px;color:#29303d;margin-left:8px}
 .rental-late{font-weight:900;color:#b91c1c}.rental-ok{font-weight:850;color:#208256}
 #rentalRows td{vertical-align:middle}
+.academic-metrics{display:flex;gap:12px;flex-wrap:wrap;margin:15px 0 20px}
+.academic-metrics>div{min-width:140px;flex:1;background:#f9fafb;border:1px solid #e8eaf0;padding:16px 20px;border-radius:13px}
+.academic-metrics span{display:block;font-size:12px;color:#777e8c;font-weight:800}
+.academic-metrics strong{font-size:26px;color:#252b38}
+.academic-textarea{display:block;width:100%;min-height:240px;padding:15px;resize:vertical;font:13px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;tab-size:4}
+.academic-help{background:#f8fafc;border-left:4px solid #ee785c;border-radius:9px;padding:15px 18px;margin:18px 0;line-height:1.65}
+.academic-help p{font-size:13px;margin:6px 0;color:#5f6778}
+.academic-commands{display:flex;align-items:center;gap:15px;flex-wrap:wrap;margin-top:18px}
+.academic-commands>input{max-width:100%;font-size:14px}
+.academic-preview{background:#fffaf8;border:1px solid #efcfbf;border-radius:12px;padding:18px;margin:16px 0}
+.academic-preview h3{margin:0 0 10px;font-size:18px}
+#academicPreviewStats{font-weight:800}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -108,6 +120,7 @@
       <button type="button" data-tab="rentalDue"><span>◷</span> 대여 기한·연체</button>
       <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
       <button type="button" data-tab="studentPolicy"><span>♧</span> 학생·패널티 관리</button>
+      <button type="button" data-tab="academicYear"><span>▦</span> 학년도·승급 관리</button>
       <button type="button" data-tab="staff"><span>♧</span> 교직원 대여 관리</button>
       <a class="nav-print-link" href="/admin/print"><span>▦</span> QR 라벨 인쇄</a>
       <button type="button" data-tab="settings"><span>⚙</span> 관리 도구</button>
@@ -320,6 +333,65 @@
   </div>
   <div id="studentPolicyMessage" class="msg hide" role="status"></div>
  </section>
+</div>
+<div id="academicYear" class="tab">
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">학년도 및 영구 학생 ID</h2>
+      <p class="subtext">학생의 고유 ID와 PIN·대여 이력은 유지하고 학년·반·번호만 변경합니다.</p></div>
+      <button type="button" class="btn" id="yearRefresh">↻ 현재 명단 불러오기</button>
+    </div>
+    <div class="academic-metrics">
+      <div><span>현재 학년도</span><strong id="academicCurrentYear">—</strong></div>
+      <div><span>등록된 학생</span><strong id="academicRosterCount">—</strong></div>
+      <div><span>다음 학년도</span><strong id="academicNextYear">—</strong></div>
+    </div>
+    <div class="notice">학생 고유 ID는 한 번 발급되면 바뀌지 않습니다. <strong>다른 학생을 동일 인물로 잘못 매칭하면 PIN과 패널티까지 연결될 수 있으므로</strong> 학교의 공식 반 편성 명단과 반드시 대조하세요. 기존 데이터는 작업 전에 전체 JSON 및 서버 DB를 별도로 백업하세요.</div>
+    <div class="searchline">
+      <input id="academicSearch" class="input search" placeholder="현재 학년·반·번호 또는 UID 검색" aria-label="학년도 학생 검색">
+      <button class="btn" id="academicDownload" type="button">↓ 현재 명단 TSV 템플릿</button>
+    </div>
+    <div class="tablewrap"><table><thead><tr><th>영구 학생 UID</th><th>현재 학급</th><th>PIN</th><th>미반납</th></tr></thead><tbody id="academicRosterRows"></tbody></table></div>
+    <p class="helper">화면에는 최대 150명만 표시합니다. 다운로드하는 템플릿에는 현재 학년도의 전체 명단이 포함됩니다. 새 반 편성은 별도 공식 명단을 기준으로 입력해야 합니다.</p>
+  </section>
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">다음 학년도 일괄 승급</h2>
+      <p class="subtext">명단 작성 → 미리보기·충돌 확인 → 관리자가 최종 확정하는 3단계 방식입니다.</p></div></div>
+    <div class="academic-help">
+      <strong>TSV/CSV 입력 방법</strong>
+      <p>위에서 템플릿을 받아 세 번째 열(<code>new_student_id</code>)에 새 학년·반·번호를 작성하세요. 졸업은 <code>GRADUATE</code>, 전출은 <code>LEAVE</code>로 작성합니다. 한 학생도 빠뜨리지 않아야 하며, 미반납 우산이 있는 학생은 졸업·전출할 수 없습니다.</p>
+      <p>Excel에서 학년·반·번호가 날짜로 변환되지 않도록 <strong>모든 ID 열을 텍스트 형식</strong>으로 가져오세요. 학교 명단을 외부에 공개하지 마세요.</p>
+    </div>
+    <div class="field"><label for="academicInput">승급 명단 (student_uid, old_student_id, new_student_id)</label>
+      <textarea id="academicInput" class="input academic-textarea" rows="10" spellcheck="false" placeholder="student_uid&#9;old_student_id&#9;new_student_id&#10;STU-...&#9;5-2-14&#9;6-1-7"></textarea></div>
+    <div class="academic-commands">
+      <input type="file" id="academicFile" accept=".tsv,.csv,.txt,text/plain,text/csv" aria-label="승급 명단 파일 불러오기">
+      <button class="btn" id="academicPreview" type="button">1. 미리보기 · 누락 검사</button>
+    </div>
+    <div class="msg hide" id="academicMessage" role="status" aria-live="polite"></div>
+    <div class="academic-preview hide" id="academicPreviewBox">
+      <h3>학년도 변경 미리보기</h3>
+      <div id="academicPreviewStats"></div>
+      <p id="academicPreviewProblems" class="helper"></p>
+      <label class="confirm-penalty"><input type="checkbox" id="academicConfirmed"> 모든 학생을 공식 명단과 대조하고, 누락·미반납·중복 오류가 없으며, DB 백업을 완료했습니다.</label>
+      <div class="actions"><button id="academicApply" type="button" class="btn danger" disabled>2. 다음 학년도 확정 적용</button></div>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">학생 개별 배정 보정</h2>
+      <p class="subtext">승급 이후 반 편성 오류나 복학 학생을 처리할 때 사용합니다. 이전 학년도 기록과 PIN은 유지됩니다.</p></div></div>
+    <div class="formgrid">
+      <div class="field"><label for="academicFixUid">영구 학생 UID</label>
+        <input id="academicFixUid" class="input" maxlength="24" placeholder="STU-..." spellcheck="false"></div>
+      <div class="field"><label for="academicFixLabel">새 학년·반·번호</label>
+        <input id="academicFixLabel" class="input" maxlength="8" placeholder="6-1-7" spellcheck="false"></div>
+      <div class="field wide"><label for="academicFixReason">신원 확인 및 변경 사유 (5자 이상)</label>
+        <input id="academicFixReason" class="input" maxlength="500" placeholder="예: 공식 반 편성표 대조 후 정정"></div>
+    </div>
+    <label class="confirm-penalty"><input type="checkbox" id="academicFixVerified"> 해당 학생의 실제 신원과 영구 ID를 확인했습니다.</label>
+    <div class="actions"><button type="button" id="academicFixApply" class="btn">학급 배정 정정</button></div>
+    <div class="msg hide" id="academicFixMessage" role="status" aria-live="polite"></div>
+    <p class="helper">UID를 모르면 이전 학년도에 다운로드한 명단 또는 전체 JSON 백업의 학생 UID를 확인하세요. 이미 다른 학생에게 배정된 학년·반·번호로는 변경할 수 없습니다.</p>
+  </section>
 </div>
 <div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/admin/print">▦ QR 인쇄 센터</a><a class="btn" href="/" target="_blank" rel="noopener">↗ 통합 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
     <p class="fixednote">KEISUNG UMBRELLA · 관리자 접근 전용 · 서버 데이터 기준</p>
