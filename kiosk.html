@@ -197,7 +197,7 @@ async function refresh(){try{const data=await api("/api/umbrellas");$("stock").t
 const scanCanvas=document.createElement("canvas"),scanContext=scanCanvas.getContext("2d",{willReadFrequently:true});
 function acceptQr(value){
  const id=String(value||"").trim().toUpperCase();
- if(!/^UMB-\\d{4,}$/.test(id))return false;
+ if(!/^UMB-\d{4,}$/.test(id))return false;
  hideModal();
  $("umbrella").value=id;
  $("next").disabled=false;
