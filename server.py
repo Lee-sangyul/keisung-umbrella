@@ -318,6 +318,16 @@ def change_state(umbrella_id: str, data: StatusRequest, request: Request):
     return {"ok": True, "id": umbrella_id, "status": target}
 
 
+
+@app.get("/api/admin/inventory")
+def admin_inventory(request: Request):
+    """Private inventory view. Student identifiers never appear in the public list."""
+    require_admin(request)
+    with connect() as c:
+        rows = c.execute("SELECT id,status,borrower,rental_id FROM umbrellas ORDER BY id DESC").fetchall()
+    return [{"id": uid(r["id"]), "status": r["status"], "borrower": r["borrower"],
+             "rental_id": r["rental_id"]} for r in rows]
+
 @app.get("/api/admin/events")
 def admin_events(request: Request):
     require_admin(request)
