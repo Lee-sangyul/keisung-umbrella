@@ -799,6 +799,82 @@ def extend_active_rental(rental_id: str,data: RentalExtendRequest,request: Reque
             "due_at":due_at,"extended_days":data.extra_days}
 
 
+
+class AcademicEntry(BaseModel):
+    student_uid: str = Field(min_length=24,max_length=24)
+    old_student_id: str = Field(min_length=5,max_length=8)
+    new_student_id: str = Field(min_length=5,max_length=8)
+
+
+class AcademicPreviewRequest(BaseModel):
+    to_year: int = Field(ge=2025,le=2100)
+    entries: list[AcademicEntry] = Field(min_length=1,max_length=2500)
+
+
+class AcademicApplyRequest(AcademicPreviewRequest):
+    preview_token: str = Field(min_length=64,max_length=64)
+    confirmed: bool = False
+
+
+class AcademicAssignmentRequest(BaseModel):
+    student_uid: str = Field(min_length=24,max_length=24)
+    new_student_id: str
+    reason: str = Field(min_length=5,max_length=500)
+    verified_identity: bool = False
+
+
+@app.get("/api/admin/academic-year")
+def get_academic_year(request: Request):
+    require_admin(request)
+    with connect() as c:
+        year=academic.school_year(c)
+        roster=academic.account_roster(c)
+        transitions=c.execute(
+            """SELECT id,from_year,to_year,actor,completed_at,transferred,graduated,left_school
+               FROM academic_transitions ORDER BY id DESC LIMIT 20"""
+        ).fetchall()
+    return Response(
+        json.dumps({"school_year":year,"next_year":year+1,
+                    "roster":roster,"transitions":[dict(row) for row in transitions]},
+                   ensure_ascii=False),
+        media_type="application/json",headers={"Cache-Control":"no-store"}
+    )
+
+
+@app.post("/api/admin/academic-year/preview")
+def academic_year_preview(data: AcademicPreviewRequest,request: Request):
+    require_admin(request,csrf=True)
+    with connect() as c:
+        result=academic.preview_transition(c,data.to_year,
+            [entry.model_dump() for entry in data.entries])
+    return Response(json.dumps(result,ensure_ascii=False),media_type="application/json",
+                    headers={"Cache-Control":"no-store"})
+
+
+@app.post("/api/admin/academic-year/apply")
+def academic_year_apply(data: AcademicApplyRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    if not data.confirmed:
+        raise HTTPException(422,"학교 명단 대조 및 변경사항 확인이 필요합니다.")
+    with transaction() as c:
+        result=academic.apply_transition(c,data.to_year,
+            [entry.model_dump() for entry in data.entries],
+            data.preview_token,actor,now())
+    return Response(json.dumps(result,ensure_ascii=False),media_type="application/json",
+                    headers={"Cache-Control":"no-store"})
+
+
+@app.post("/api/admin/academic-year/assign")
+def academic_year_assign(data: AcademicAssignmentRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    if not data.verified_identity:
+        raise HTTPException(422,"신원 확인 후 학생의 새 학급을 지정해 주세요.")
+    with transaction() as c:
+        result=academic.assign_student(c,data.student_uid,data.new_student_id,
+                                       actor,data.reason,now())
+    return result
+
+
 class PolicyRequest(BaseModel):
     monthly_limit: int = Field(ge=1,le=100)
 
