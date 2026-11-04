@@ -110,6 +110,15 @@ def init_db():
             updated_at TEXT NOT NULL,
             updated_by TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS student_pin_enrollments (
+            student_id TEXT PRIMARY KEY,
+            salt BLOB NOT NULL,
+            code_hash BLOB NOT NULL,
+            expires_at INTEGER NOT NULL,
+            failed_attempts INTEGER NOT NULL DEFAULT 0,
+            issued_by TEXT NOT NULL,
+            issued_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS policies (
             key TEXT PRIMARY KEY,
             value INTEGER NOT NULL
@@ -284,6 +293,20 @@ def validate_student(student):
     return student
 
 
+class StudentPinSetupRequest(BaseModel):
+    student_id: str
+    verified_identity: bool = False
+
+
+class StudentPinEnrollRequest(BaseModel):
+    grade: int = Field(ge=1, le=6)
+    classroom: int = Field(ge=1, le=4)
+    number: int = Field(ge=1, le=36)
+    enrollment_code: str = Field(pattern=r"^\d{10}$", min_length=10, max_length=10)
+    pin: str = Field(pattern=r"^\d{6}$", min_length=6, max_length=6)
+    pin_confirm: str = Field(pattern=r"^\d{6}$", min_length=6, max_length=6)
+
+
 class StudentPinIssueRequest(BaseModel):
     student_id: str
     verified_identity: bool = False
@@ -340,6 +363,8 @@ def issue_student_pin(data: StudentPinIssueRequest, request: Request):
     salt = secrets.token_bytes(16)
     digest = student_pin_hash(pin, salt)
     with transaction() as c:
+        # Admin reissues revoke any pending self-enrollment invitation.
+        c.execute("DELETE FROM student_pin_enrollments WHERE student_id=?", (student,))
         c.execute(
             """INSERT INTO student_pins(student_id,salt,pin_hash,failed_attempts,last_failed_at,
                locked_until,updated_at,updated_by) VALUES(?,?,?,0,0,0,?,?)
@@ -351,6 +376,105 @@ def issue_student_pin(data: StudentPinIssueRequest, request: Request):
     return Response(content=json.dumps({"student_id":student,"pin":pin},ensure_ascii=False),
                     media_type="application/json",
                     headers={"Cache-Control":"no-store","Pragma":"no-cache"})
+
+
+
+@app.post("/api/admin/student-pin/setup-code")
+def issue_student_pin_setup_code(data: StudentPinSetupRequest, request: Request):
+    """Issue an expiring, single-use setup code after an admin verifies identity.
+
+    The code is returned only once; the stored copy is a salted hash.
+    Existing PINs cannot be overwritten through the kiosk enrollment flow.
+    """
+    actor = require_admin(request, csrf=True)
+    student = validate_student(data.student_id)
+    if not data.verified_identity:
+        raise HTTPException(422, "학생 신원을 확인한 뒤 등록코드를 발급해 주세요.")
+    code = f"{secrets.randbelow(10**10):010d}"
+    salt = secrets.token_bytes(16)
+    code_hash = student_pin_hash(code, salt)
+    expires_at = int(time.time()) + 900
+    with transaction() as c:
+        if c.execute("SELECT 1 FROM student_pins WHERE student_id=?", (student,)).fetchone():
+            raise HTTPException(409, "이미 PIN이 등록되어 있습니다. PIN 재발급 기능을 사용해 주세요.")
+        c.execute(
+            """INSERT INTO student_pin_enrollments
+               (student_id,salt,code_hash,expires_at,failed_attempts,issued_by,issued_at)
+               VALUES(?,?,?,?,0,?,?)
+               ON CONFLICT(student_id) DO UPDATE SET
+                 salt=excluded.salt,code_hash=excluded.code_hash,
+                 expires_at=excluded.expires_at,failed_attempts=0,
+                 issued_by=excluded.issued_by,issued_at=excluded.issued_at""",
+            (student, salt, code_hash, expires_at, actor, now())
+        )
+    return Response(
+        json.dumps({"student_id":student, "enrollment_code":code, "expires_in_seconds":900},
+                   ensure_ascii=False),
+        media_type="application/json",
+        headers={"Cache-Control":"no-store","Pragma":"no-cache"}
+    )
+
+
+@app.post("/api/student-pin/enroll")
+def enroll_student_pin(data: StudentPinEnrollRequest, request: Request):
+    """One-time kiosk PIN setup requires a teacher-issued enrollment code."""
+    verify_origin(request)
+    student = validate_student(f"{data.grade}-{data.classroom}-{data.number}")
+    if data.pin != data.pin_confirm:
+        raise HTTPException(422, "PIN 확인 입력이 일치하지 않습니다.")
+    if len(set(data.pin)) == 1 or data.pin in {"123456", "654321"}:
+        raise HTTPException(422, "너무 쉬운 PIN입니다. 다른 숫자 6자리로 설정해 주세요.")
+
+    outcome = "invalid"
+    with transaction() as c:
+        # Never allow enrollment to reset a PIN that was already issued.
+        if c.execute("SELECT 1 FROM student_pins WHERE student_id=?", (student,)).fetchone():
+            outcome = "exists"
+        else:
+            row = c.execute(
+                "SELECT * FROM student_pin_enrollments WHERE student_id=?", (student,)
+            ).fetchone()
+            current = int(time.time())
+            if row and row["expires_at"] <= current:
+                c.execute("DELETE FROM student_pin_enrollments WHERE student_id=?", (student,))
+                outcome = "expired"
+            elif row and row["failed_attempts"] >= 5:
+                outcome = "blocked"
+            elif row:
+                expected = student_pin_hash(data.enrollment_code, row["salt"])
+                if hmac.compare_digest(expected, row["code_hash"]):
+                    salt = secrets.token_bytes(16)
+                    c.execute(
+                        """INSERT INTO student_pins(
+                             student_id,salt,pin_hash,failed_attempts,last_failed_at,
+                             locked_until,updated_at,updated_by)
+                           VALUES(?,?,?,0,0,0,?,?)""",
+                        (student, salt, student_pin_hash(data.pin,salt), now(), "student-enrollment")
+                    )
+                    c.execute(
+                        "DELETE FROM student_pin_enrollments WHERE student_id=?", (student,)
+                    )
+                    outcome = "ok"
+                else:
+                    failures = row["failed_attempts"] + 1
+                    c.execute(
+                        "UPDATE student_pin_enrollments SET failed_attempts=? WHERE student_id=?",
+                        (failures, student)
+                    )
+                    outcome = "blocked" if failures >= 5 else "invalid"
+    if outcome == "exists":
+        raise HTTPException(409, "이미 PIN이 등록된 학생입니다. 기존 PIN을 사용하거나 담당 선생님께 재발급을 요청해 주세요.")
+    if outcome == "expired":
+        raise HTTPException(410, "등록코드가 만료되었습니다. 담당 선생님에게 새 코드를 받아 주세요.")
+    if outcome == "blocked":
+        raise HTTPException(429, "등록코드 입력 횟수가 초과되었습니다. 담당 선생님께 새 등록코드를 요청해 주세요.")
+    if outcome != "ok":
+        raise HTTPException(401, "등록코드가 올바르지 않거나 발급되지 않았습니다.")
+    return Response(
+        json.dumps({"ok": True, "student_id": student}, ensure_ascii=False),
+        media_type="application/json",
+        headers={"Cache-Control":"no-store"}
+    )
 
 
 class PolicyRequest(BaseModel):
@@ -400,12 +524,14 @@ def student_record(student_id: str,request: Request):
     with connect() as c:
         usage=month_usage(c,student)
         pin_status=c.execute("SELECT locked_until,updated_at FROM student_pins WHERE student_id=?",(student,)).fetchone()
+        pending_setup=c.execute("SELECT expires_at FROM student_pin_enrollments WHERE student_id=?",(student,)).fetchone()
         umbrella=c.execute("SELECT id,status FROM umbrellas WHERE borrower=?",(student,)).fetchone()
         penalties=c.execute("""SELECT id,student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id
           FROM penalty_actions WHERE student_id=? ORDER BY id DESC LIMIT 200""",(student,)).fetchall()
         total=penalty_total(c,student)
     return {"student_id":student,"usage":usage,"has_pin":bool(pin_status),
         "pin_locked":bool(pin_status and pin_status["locked_until"]>int(time.time())),
+        "setup_code_pending":bool(pending_setup and pending_setup["expires_at"]>int(time.time()) and not pin_status),
         "active_umbrella":uid(umbrella["id"]) if umbrella else None,
         "penalty_points":total,
         "penalties":[{**dict(p),"umbrella_id":uid(p["umbrella_id"]) if p["umbrella_id"] else None} for p in penalties]}
