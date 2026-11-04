@@ -104,7 +104,7 @@ def test_staff_borrow_return_with_due_date_and_student_quota_separation(client):
     assert client.get("/api/admin/rentals").json()["total"] == 0
     assert post(client, "/api/staff/return", account_payload(pin)).status_code == 409
     backup = client.get("/api/admin/export").json()
-    assert backup["schema_version"] == "3.4"
+    assert backup["schema_version"] == "3.5"
     assert len(backup["staff_accounts"]) == 1
     assert len(backup["staff_account_events"]) == 1
     assert pin not in str(backup)
