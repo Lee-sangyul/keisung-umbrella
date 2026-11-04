@@ -133,6 +133,7 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 .pin-setup-fields label{font-size:clamp(13px,1.1vw,18px);font-weight:850}
 .pin-setup-fields input{width:100%;min-width:0;border:2px solid #efc5b8;border-radius:14px;height:54px;text-align:center;font-weight:900;font-size:clamp(20px,2vw,28px);letter-spacing:.15em}
 #pinSetupKeypad{width:min(100%,300px)}
+#doneMessage{white-space:pre-line;max-width:950px}
 #pinSetupMessage{color:#7a6869;font-weight:700;font-size:clamp(12px,1.05vw,15px);line-height:1.4;margin:0}
 @media(max-width:550px){.pin-setup-fields{grid-template-columns:1fr;gap:8px}.pin-setup-card{gap:8px}.pin-setup-fields input{height:42px}}
 </style></head>
@@ -155,8 +156,8 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
     <div class="progress"><span class="current"></span><span class="current"></span><span></span></div>
     <div class="center pin-setup-center">
       <p class="eyebrow">처음 이용하는 학생</p>
-      <h1>처음 사용할 PIN을 만들어 주세요!</h1>
-      <p class="sub">본인의 학년·반·번호가 맞는지 확인한 뒤 6자리 PIN을 두 번 입력해 주세요. 처음 설정할 때는 담당 선생님의 확인을 받는 게 안전해요.</p>
+      <h1>처음 사용할 PIN을 신청해 주세요!</h1>
+      <p class="sub">본인의 학년·반·번호를 확인하고 PIN을 설정해 주세요. 신청 후 담당 선생님이 신원과 신청 확인 코드를 확인해야 사용할 수 있어요.</p>
       <div class="pin-setup-card">
         <div class="pin-setup-fields">
           <div><label for="newStudentPin">새 PIN (6자리)</label>
@@ -165,7 +166,7 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
             <input id="confirmStudentPin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]*" autocomplete="new-password" placeholder="••••••" aria-label="새 학생 PIN 확인"></div>
         </div>
         <div class="pin-keypad" id="pinSetupKeypad" aria-label="PIN 만들기 숫자 키패드"></div>
-        <p id="pinSetupMessage" role="status" aria-live="polite">PIN은 한 번 만들면 다음 대여·반납부터 사용해요. PIN을 잊으면 담당 선생님께 문의하세요.</p>
+        <p id="pinSetupMessage" role="status" aria-live="polite">신청 후 표시되는 8자리 확인 코드를 담당 선생님께 보여주세요. 승인이 완료되어야 이용할 수 있어요.</p>
       </div>
     </div>
   </section>
@@ -176,7 +177,7 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
   <section class="page" id="review"><div class="progress"><span class="current"></span><span class="current"></span><span class="current"></span></div>
    <div class="center"><p class="eyebrow">마지막 단계</p><h1>정보가 맞는지 확인해 주세요</h1><p class="sub">다른 학생의 정보를 입력하면 안 돼요.</p>
    <div class="review-card"><div class="review-row"><span>이용 방법</span><strong id="vAction">대여</strong></div><div class="review-row"><span>학생</span><strong id="vStudent">-</strong></div><div class="review-row"><span>우산</span><strong id="vUmbrella">-</strong></div></div>
-   <div class="pin-panel"><label for="studentPin">학생 PIN (숫자 6자리)</label><p>직접 설정한 PIN 또는 담당 선생님에게 발급받은 PIN을 입력해 주세요. 다른 사람에게 알려주면 안 돼요.</p>
+   <div class="pin-panel"><label for="studentPin">학생 PIN (숫자 6자리)</label><p>담당 선생님이 승인한 PIN 또는 담당 선생님에게 발급받은 PIN을 입력해 주세요. 다른 사람에게 알려주면 안 돼요.</p>
    <input id="studentPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" autocapitalize="off" placeholder="••••••" aria-label="학생 PIN 6자리">
    <div class="pin-keypad" id="pinKeypad" aria-label="PIN 숫자 키패드"></div></div></div>
   </section>
@@ -290,7 +291,15 @@ async function continueAfterStudent(){
   $("studentPin").value="";
   $("newStudentPin").value="";
   $("confirmStudentPin").value="";
-  show(record.has_pin?3:2);
+  if(!record.has_pin)show(2);
+  else if(record.approval_status!=="APPROVED"){
+   $("doneIcon").textContent=record.approval_status==="REJECTED"?"⚠️":"⏳";
+   $("doneTitle").textContent=record.approval_status==="REJECTED"?"PIN 신청이 반려됐어요":"PIN 승인 대기 중이에요";
+   $("doneMessage").textContent=record.approval_status==="REJECTED"?
+     "담당 선생님께 문의해 주세요. 신원 확인 후 새 PIN을 발급받을 수 있어요.":
+     "아직 선생님의 승인이 끝나지 않았어요.\n신청할 때 받은 확인 코드를 선생님께 보여주세요.\n코드를 잊었다면 선생님께 PIN 재발급을 요청해 주세요.";
+   show(5);
+  }else show(3);
  }catch(error){
   modalError("학생 정보 확인 실패",error.message+"\n다시 시도해 주세요.");
   $("next").disabled=false;
@@ -301,11 +310,13 @@ async function saveFirstPin(){
  busy=true;$("next").disabled=true;
  const pin=$("newStudentPin").value;
  try{
-  await api("/api/student-pin/enroll",{grade,classroom:klass,number,pin,pin_confirm:$("confirmStudentPin").value});
-  $("studentPin").value=pin;
+  const result=await api("/api/student-pin/enroll",{grade,classroom:klass,number,pin,pin_confirm:$("confirmStudentPin").value});
+  $("studentPin").value="";
   $("newStudentPin").value="";$("confirmStudentPin").value="";
-  $("pinSetupMessage").textContent="PIN 설정 완료! 이제 우산 QR을 스캔해 주세요.";
-  show(3);
+  $("doneIcon").textContent="⏳";
+  $("doneTitle").textContent="PIN 승인 신청 완료!";
+  $("doneMessage").textContent="담당 선생님께 본인의 학년·반·번호와 아래 확인 코드를 보여주세요.\n\n신청 확인 코드: "+result.approval_code+"\n\n승인 전에는 우산 대여·반납이 불가능해요.\n이 코드는 나중에 다시 표시되지 않아요.";
+  show(5);
  }catch(error){
   $("pinSetupMessage").textContent="설정 실패: "+error.message;
   $("next").disabled=!pinSetupReady();
