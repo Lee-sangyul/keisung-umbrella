@@ -36,6 +36,8 @@ app.mount("/assets", StaticFiles(directory=ROOT / "assets"), name="assets")
 STATES = {"AVAILABLE", "BORROWED", "LOST", "DAMAGED", "DISPOSED"}
 SEOUL = ZoneInfo("Asia/Seoul")
 STUDENT_RE = re.compile(r"^[1-6]-[1-4]-(?:[1-9]|[12][0-9]|3[0-6])$")
+STAFF_ID_RE = re.compile(r"^[A-Z0-9][A-Z0-9_-]{2,19}$")
+STAFF_PREFIX = "STAFF:"
 PENALTY_POINTS = {"LOST": 3, "ACCIDENTAL_DAMAGE": 1, "INTENTIONAL_DAMAGE": 5, "WARNING": 0}
 ID_RE = re.compile(r"^UMB-\d{4,}$")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
@@ -111,6 +113,28 @@ def init_db():
             updated_at TEXT NOT NULL,
             updated_by TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS staff_accounts (
+            staff_id TEXT PRIMARY KEY,
+            display_name TEXT NOT NULL,
+            salt BLOB NOT NULL,
+            pin_hash BLOB NOT NULL,
+            failed_attempts INTEGER NOT NULL DEFAULT 0,
+            last_failed_at INTEGER NOT NULL DEFAULT 0,
+            locked_until INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            updated_by TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS staff_account_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            staff_id TEXT NOT NULL REFERENCES staff_accounts(staff_id),
+            action TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS staff_events_idx
+            ON staff_account_events(staff_id,id);
         CREATE TABLE IF NOT EXISTS umbrella_locations (
             umbrella_id INTEGER PRIMARY KEY REFERENCES umbrellas(id),
             location TEXT NOT NULL,
@@ -405,6 +429,209 @@ def student_pin_error(result: str):
         raise HTTPException(429, "PIN 입력 실패가 누적되어 15분간 인증이 제한됩니다. 담당 선생님께 문의하세요.")
     if result != "ok":
         raise HTTPException(401, "학생 PIN이 일치하지 않거나 등록되지 않았습니다. 담당 선생님께 확인하세요.")
+
+
+
+class StaffAccountRequest(BaseModel):
+    staff_id: str = Field(min_length=3,max_length=20)
+    display_name: str = Field(min_length=2,max_length=50)
+    verified_identity: bool = False
+
+
+class StaffPinResetRequest(BaseModel):
+    verified_identity: bool = False
+
+
+class StaffActiveRequest(BaseModel):
+    active: bool
+
+
+class StaffBorrowRequest(BaseModel):
+    staff_id: str = Field(min_length=3,max_length=20)
+    umbrella_id: str
+    pin: str = Field(min_length=6,max_length=6,pattern=r"^\\d{6}$")
+
+
+def validate_staff_id(value: str) -> str:
+    result=value.strip().upper()
+    if not STAFF_ID_RE.fullmatch(result):
+        raise HTTPException(422,"교직원 ID는 영문 대문자·숫자·_·-로 된 3~20자여야 합니다.")
+    return result
+
+
+def staff_borrower(staff_id: str) -> str:
+    return STAFF_PREFIX+staff_id
+
+
+def staff_public_record(row) -> dict:
+    return {"staff_id":row["staff_id"],"display_name":row["display_name"],
+            "active":bool(row["active"]),"created_at":row["created_at"],
+            "updated_at":row["updated_at"],"updated_by":row["updated_by"]}
+
+
+def generate_staff_pin() -> tuple[str,bytes,bytes]:
+    pin=f"{secrets.randbelow(1000000):06d}"
+    salt=secrets.token_bytes(16)
+    return pin,salt,student_pin_hash(pin,salt)
+
+
+def check_staff_pin(c,staff_id: str,pin: str,allow_disabled_return: bool=False) -> str:
+    """Like student PIN authentication, record failures inside a committed transaction."""
+    current=int(time.time())
+    row=c.execute("SELECT * FROM staff_accounts WHERE staff_id=?",(staff_id,)).fetchone()
+    if row and row["locked_until"]>current:
+        return "locked"
+    salt=row["salt"] if row else b"0"*16
+    guess=student_pin_hash(pin,salt)
+    verified=bool(row and hmac.compare_digest(guess,row["pin_hash"]))
+    if verified:
+        if row["failed_attempts"] or row["locked_until"]:
+            c.execute("""UPDATE staff_accounts SET failed_attempts=0,last_failed_at=0,locked_until=0
+                         WHERE staff_id=?""",(staff_id,))
+        if not row["active"] and not allow_disabled_return:
+            return "disabled"
+        return "ok"
+    if row:
+        failures=(row["failed_attempts"] if current-row["last_failed_at"]<900 else 0)+1
+        lock=current+900 if failures>=5 else 0
+        c.execute("""UPDATE staff_accounts SET failed_attempts=?,last_failed_at=?,locked_until=?
+                     WHERE staff_id=?""",(failures,current,lock,staff_id))
+        if lock:
+            return "locked"
+    return "invalid"
+
+
+def staff_pin_error(result: str):
+    if result=="locked":
+        raise HTTPException(429,"PIN 입력 오류가 누적되어 15분간 잠겼습니다.")
+    if result=="disabled":
+        raise HTTPException(403,"비활성화된 교직원 계정입니다. 관리자에게 문의하세요.")
+    if result!="ok":
+        raise HTTPException(401,"교직원 ID 또는 PIN을 확인해 주세요.")
+
+
+@app.get("/api/admin/staff")
+def admin_staff_list(request: Request):
+    require_admin(request)
+    with connect() as c:
+        rows=c.execute("""SELECT staff_id,display_name,active,created_at,updated_at,updated_by
+                          FROM staff_accounts ORDER BY staff_id""").fetchall()
+    return {"staff":[staff_public_record(row) for row in rows]}
+
+
+@app.post("/api/admin/staff")
+def admin_staff_create(data: StaffAccountRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    staff_id=validate_staff_id(data.staff_id)
+    display_name=data.display_name.strip()
+    if len(display_name)<2:
+        raise HTTPException(422,"교직원 이름 또는 표시명을 두 글자 이상 입력해 주세요.")
+    if not data.verified_identity:
+        raise HTTPException(422,"교직원의 신원을 직접 확인해 주세요.")
+    pin,salt,digest=generate_staff_pin()
+    with transaction() as c:
+        exists=c.execute("SELECT 1 FROM staff_accounts WHERE staff_id=?",(staff_id,)).fetchone()
+        if exists:
+            raise HTTPException(409,"이미 등록된 교직원 ID입니다. PIN 재발급을 사용하세요.")
+        c.execute(
+            """INSERT INTO staff_accounts(staff_id,display_name,salt,pin_hash,
+                                           created_at,updated_at,updated_by)
+               VALUES(?,?,?,?,?,?,?)""",
+            (staff_id,display_name,salt,digest,now(),now(),actor))
+        c.execute("""INSERT INTO staff_account_events(staff_id,action,actor,created_at)
+                     VALUES(?,'CREATED',?,?)""",(staff_id,actor,now()))
+    return Response(json.dumps({"ok":True,"staff_id":staff_id,"pin":pin},ensure_ascii=False),
+                    media_type="application/json",headers={"Cache-Control":"no-store","Pragma":"no-cache"})
+
+
+@app.post("/api/admin/staff/{staff_id}/pin-reset")
+def admin_staff_reset_pin(staff_id: str,data: StaffPinResetRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    staff_id=validate_staff_id(staff_id)
+    if not data.verified_identity:
+        raise HTTPException(422,"PIN 재발급 전 교직원의 신원 확인이 필요합니다.")
+    pin,salt,digest=generate_staff_pin()
+    with transaction() as c:
+        cur=c.execute(
+            """UPDATE staff_accounts SET salt=?,pin_hash=?,failed_attempts=0,
+                       last_failed_at=0,locked_until=0,updated_at=?,updated_by=?
+               WHERE staff_id=?""",(salt,digest,now(),actor,staff_id))
+        if not cur.rowcount:
+            raise HTTPException(404,"교직원 계정을 찾을 수 없습니다.")
+        c.execute("""INSERT INTO staff_account_events(staff_id,action,actor,created_at)
+                     VALUES(?,'PIN_RESET',?,?)""",(staff_id,actor,now()))
+    return Response(json.dumps({"ok":True,"staff_id":staff_id,"pin":pin},ensure_ascii=False),
+                    media_type="application/json",headers={"Cache-Control":"no-store","Pragma":"no-cache"})
+
+
+@app.put("/api/admin/staff/{staff_id}/status")
+def admin_staff_set_active(staff_id: str,data: StaffActiveRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    staff_id=validate_staff_id(staff_id)
+    with transaction() as c:
+        cur=c.execute("""UPDATE staff_accounts SET active=?,updated_at=?,updated_by=?
+                         WHERE staff_id=?""",(int(data.active),now(),actor,staff_id))
+        if not cur.rowcount:
+            raise HTTPException(404,"교직원 계정을 찾을 수 없습니다.")
+        c.execute("""INSERT INTO staff_account_events(staff_id,action,actor,created_at)
+                     VALUES(?,?,?,?)""",
+                  (staff_id,"ENABLED" if data.active else "DISABLED",actor,now()))
+    return {"ok":True,"staff_id":staff_id,"active":data.active}
+
+
+@app.post("/api/staff/borrow")
+def staff_borrow(data: StaffBorrowRequest,request: Request):
+    verify_origin(request)
+    staff_id=validate_staff_id(data.staff_id)
+    identity=staff_borrower(staff_id)
+    rejection=None
+    with transaction() as c:
+        rejection=check_staff_pin(c,staff_id,data.pin)
+        if rejection=="ok":
+            umbrella=c.execute("SELECT * FROM umbrellas WHERE id=?",(parse_id(data.umbrella_id),)).fetchone()
+            if not umbrella:
+                raise HTTPException(404,"등록되지 않은 우산입니다.")
+            if umbrella["status"]!="AVAILABLE":
+                raise HTTPException(409,"현재 대여할 수 없는 우산입니다.")
+            if c.execute("SELECT 1 FROM umbrellas WHERE borrower=?",(identity,)).fetchone():
+                raise HTTPException(409,"교직원 한 명당 우산은 한 개만 대여할 수 있습니다.")
+            rental=secrets.token_hex(16)
+            borrowed_at=now()
+            days=c.execute("SELECT value FROM policies WHERE key='rental_days'").fetchone()[0]
+            due_at=utc_due_in_days(days,datetime.fromisoformat(borrowed_at))
+            c.execute("""UPDATE umbrellas SET status='BORROWED',borrower=?,rental_id=? WHERE id=?""",
+                      (identity,rental,umbrella["id"]))
+            c.execute("""INSERT INTO rental_terms
+                         (rental_id,umbrella_id,student_id,borrowed_at,due_at,issued_by)
+                         VALUES(?,?,?,?,?,'staff-self-service')""",
+                      (rental,umbrella["id"],identity,borrowed_at,due_at))
+            log(c,umbrella["id"],"BORROW",identity,rental,actor="staff-self-service")
+    staff_pin_error(rejection)
+    return {"ok":True,"id":data.umbrella_id,"status":"BORROWED","due_at":due_at}
+
+
+@app.post("/api/staff/return")
+def staff_return(data: StaffBorrowRequest,request: Request):
+    verify_origin(request)
+    staff_id=validate_staff_id(data.staff_id)
+    identity=staff_borrower(staff_id)
+    rejection=None
+    with transaction() as c:
+        # Disabled staff may return their outstanding umbrella; no new borrowing.
+        rejection=check_staff_pin(c,staff_id,data.pin,allow_disabled_return=True)
+        if rejection=="ok":
+            umbrella=c.execute("SELECT * FROM umbrellas WHERE id=?",(parse_id(data.umbrella_id),)).fetchone()
+            if not umbrella or umbrella["status"]!="BORROWED":
+                raise HTTPException(409,"현재 대여 중인 우산이 아닙니다.")
+            if umbrella["borrower"]!=identity:
+                raise HTTPException(403,"해당 교직원의 대여 기록이 아닙니다.")
+            log(c,umbrella["id"],"RETURN",identity,umbrella["rental_id"],actor="staff-self-service")
+            c.execute("""UPDATE rental_terms SET returned_at=? WHERE rental_id=?
+                         AND returned_at IS NULL""",(now(),umbrella["rental_id"]))
+            c.execute("""UPDATE umbrellas SET status='AVAILABLE',borrower=NULL,rental_id=NULL
+                         WHERE id=?""",(umbrella["id"],))
+    staff_pin_error(rejection)
+    return {"ok":True,"id":data.umbrella_id,"status":"AVAILABLE"}
 
 
 @app.post("/api/admin/student-pin")
