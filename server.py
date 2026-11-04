@@ -59,7 +59,8 @@ def transaction():
 
 
 def init_db():
-    with transaction() as c:
+    c = connect()
+    try:
         c.executescript("""CREATE TABLE IF NOT EXISTS umbrellas (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             status TEXT NOT NULL DEFAULT 'AVAILABLE',
@@ -90,6 +91,9 @@ def init_db():
         CREATE UNIQUE INDEX IF NOT EXISTS one_active_student
             ON umbrellas(borrower) WHERE borrower IS NOT NULL;
         """)
+    finally:
+        c.close()
+    with transaction() as c:
         salt = secrets.token_bytes(16)
         c.execute("INSERT OR IGNORE INTO admins(username,salt,pw_hash) VALUES (?,?,?)",
                   (ADMIN_USERNAME, salt, password_hash(ADMIN_PASSWORD, salt)))
