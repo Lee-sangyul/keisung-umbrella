@@ -99,7 +99,7 @@ function settings(){return{paper:$("paper").value,orient:$("orientation").value,
 function sizes(s){const w=s.paper==="A4"?210:215.9,h=s.paper==="A4"?297:279.4;return s.orient==="portrait"?[w,h]:[h,w];}
 function summary(){const s=settings(),[w,h]=sizes(s),cw=(w-s.margin*2)/s.cols,ch=(h-s.margin*2)/s.rows;
  $("layoutSummary").textContent="1페이지 "+s.cols*s.rows+"개 · "+s.paper+" "+(s.orient==="portrait"?"세로":"가로")+
- ((s.qr+9>Math.min(cw,ch))?" · ⚠ QR 크기가 셀에 비해 큽니다. 크기나 행/열 수를 줄여 주세요.":"");
+ ((s.qr+4>cw||s.qr+(s.showTitle?5:0)+(s.showId?6:0)+4>ch)?" · ⚠ QR 크기가 셀에 비해 큽니다. 크기나 행/열 수를 줄여 주세요.":"");
 }
 settingIds.forEach(id=>$(id).addEventListener("change",summary));
 function printHtml(labels,s){
@@ -116,8 +116,8 @@ function printHtml(labels,s){
  '.sheet{width:'+w+'mm;height:'+h+'mm;background:#fff;padding:'+s.margin+'mm;margin:15px auto;display:grid;grid-template-columns:repeat('+s.cols+',minmax(0,1fr));grid-template-rows:repeat('+s.rows+',minmax(0,1fr));break-after:page;page-break-after:always;overflow:hidden}'+
  '.sheet:last-of-type{break-after:auto;page-break-after:auto}'+
  '.label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;padding:1mm;min-width:0;min-height:0;overflow:hidden;border:'+(s.borders?"1px dashed #aaa":"1px solid transparent")+'}'+
- '.qr{width:min(100%,'+s.qr+'mm);height:min(100%,'+s.qr+'mm);display:flex;align-items:center;justify-content:center;min-height:0;min-width:0}'+
- '.qr svg{display:block;width:100%;height:100%}.title{font-weight:bold;font-size:10pt;line-height:1.1}.id{font-weight:900;font-size:11pt;line-height:1.1;letter-spacing:.04em}'+
+ '.qr{width:'+s.qr+'mm;height:'+s.qr+'mm;min-width:'+s.qr+'mm;min-height:'+s.qr+'mm;max-width:none;max-height:none;flex:0 0 auto;aspect-ratio:1/1;display:block;background:#fff}'+
+ '.qr svg{display:block;width:100%;height:100%;aspect-ratio:1/1;object-fit:contain;overflow:visible}.title{font-weight:bold;font-size:10pt;line-height:1.1;flex:0 0 auto}.id{font-weight:900;font-size:11pt;line-height:1.1;letter-spacing:.04em;flex:0 0 auto}'+
  '@media print{html,body{background:white}.tools{display:none!important}.sheet{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
  return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>계성 우산 QR 인쇄</title><style>'+css+'</style></head><body>'+
  '<div class="tools"><button onclick="window.print()">인쇄 시작</button><span>'+labels.length+'개 QR · '+s.cols+'열 × '+s.rows+'행 · 배율 100% 권장</span></div>'+
@@ -127,8 +127,10 @@ async function printLabels(ids){
  if(!ids.length)return msg("인쇄할 우산을 선택해 주세요.",true);
  if(ids.length>1000)return msg("한 번에 최대 1000개까지 인쇄할 수 있습니다. 나누어 출력해 주세요.",true);
  const s=settings(),[w,h]=sizes(s),cw=(w-s.margin*2)/s.cols,ch=(h-s.margin*2)/s.rows;
- const caption=(s.showId?6:0)+(s.showTitle?5:0);
- if(s.qr+caption+2>Math.min(cw,ch))return msg("QR이 라벨 안에 들어가지 않습니다. QR 크기를 줄이거나 행·열 수를 줄여 주세요.",true);
+ const textHeight=(s.showId?6:0)+(s.showTitle?5:0);
+ // Label has 1mm padding on each side and 1mm row gaps for text.
+ if(s.qr+4>cw || s.qr+textHeight+4>ch)
+  return msg("QR이 라벨 셀에 들어가지 않습니다. QR 크기를 줄이거나 행·열 수를 줄여 주세요.",true);
  const win=window.open("","_blank");
  if(!win)return msg("팝업 차단을 해제해 주세요.",true);
  win.document.write('<!doctype html><html lang="ko"><meta charset="utf-8"><body style="font-family:sans-serif;padding:2rem">QR 생성 중…</body></html>');
