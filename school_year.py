@@ -286,6 +286,14 @@ def apply_transition(c,year,entries,preview_token,actor,timestamp):
         (result["from_year"],year,actor,timestamp,
          counts["PROMOTE"],counts["GRADUATE"],counts["LEAVE"]))
     transition_id=cur.lastrowid
+    # The legacy unique index on umbrellas.borrower is still in place.
+    # Use temporary stable labels to safely handle year-to-year slot swaps.
+    for entry in result["normalized_entries"]:
+        if entry["action"]=="PROMOTE":
+            c.execute(
+                """UPDATE umbrellas SET borrower=? WHERE borrower_uid=?
+                   AND status='BORROWED'""",
+                ("IN-TRANSFER:"+entry["student_uid"],entry["student_uid"]))
     for entry in result["normalized_entries"]:
         uid=entry["student_uid"]
         target=entry["new_student_id"]
@@ -294,6 +302,9 @@ def apply_transition(c,year,entries,preview_token,actor,timestamp):
                 """INSERT INTO student_rosters(school_year,student_id,student_uid)
                    VALUES(?,?,?)""",(year,target,uid))
             c.execute("UPDATE student_accounts SET active=1 WHERE uid=?",(uid,))
+            c.execute(
+                """UPDATE umbrellas SET borrower=? WHERE borrower_uid=?
+                   AND status='BORROWED'""",(target,uid))
         else:
             c.execute("UPDATE student_accounts SET active=0 WHERE uid=?",(uid,))
         c.execute(
@@ -333,6 +344,9 @@ def assign_student(c,uid,new_label,actor,reason,timestamp):
         c.execute("INSERT INTO student_rosters(school_year,student_id,student_uid) VALUES(?,?,?)",
                   (year,new_label,uid))
     c.execute("UPDATE student_accounts SET active=1 WHERE uid=?",(uid,))
+    c.execute(
+        """UPDATE umbrellas SET borrower=? WHERE borrower_uid=?
+           AND status='BORROWED'""",(new_label,uid))
     c.execute("""INSERT INTO academic_assignment_log(
                  school_year,student_uid,old_student_id,new_student_id,actor,reason,created_at)
                  VALUES(?,?,?,?,?,?,?)""",
