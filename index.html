@@ -404,7 +404,7 @@ const $=id=>document.getElementById(id);
 const N={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
 const A={REGISTER:"신규 등록",BORROW:"대여",RETURN:"반납",LOST:"분실 처리",DAMAGED:"파손 처리",DISPOSED:"폐기 처리",RESTORE:"복구"};
 const colors={AVAILABLE:"#31b17c",BORROWED:"#5287ee",LOST:"#ef6a74",DAMAGED:"#e6b44e",DISPOSED:"#a6aab4"};
-const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."],stocktake:["재고 실사","학교 전체 또는 위치별 우산 수량을 확인합니다."],rentalDue:["대여 기한·연체","반납 예정일과 연체 현황을 관리합니다."],staff:["교직원 대여 관리","교직원 ID와 PIN을 발급하고 대여 권한을 관리합니다."]};
+const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."],stocktake:["재고 실사","학교 전체 또는 위치별 우산 수량을 확인합니다."],rentalDue:["대여 기한·연체","반납 예정일과 연체 현황을 관리합니다."],staff:["교직원 대여 관리","교직원 ID와 PIN을 발급하고 대여 권한을 관리합니다."],academicYear:["학년도·승급 관리","영구 학생 ID와 새 학년도 반 편성을 안전하게 관리합니다."]};
 let csrf="",currentUser="",inventory=[],events=[],busy=false;
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function api(path,{method="GET",body,auth=false}={}){
@@ -422,6 +422,7 @@ for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>{
  if(b.dataset.tab==="stocktake"){renderStocktakeLocations();loadStocktakes();}
  if(b.dataset.tab==="rentalDue")loadRentalDashboard();
  if(b.dataset.tab==="staff")loadStaffAccounts();
+ if(b.dataset.tab==="academicYear")loadAcademicYear();
 };
 for(const b of document.querySelectorAll("[data-go]"))b.onclick=()=>changeTab(b.dataset.go);
 function pill(status){return '<span class="pill '+status+'">'+(N[status]||esc(status))+"</span>";}
@@ -773,6 +774,181 @@ window.addEventListener("pagehide",stopStocktakeCamera);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")stopStocktakeCamera();});
 
 
+
+
+let academicRoster=[],academicStatus=null,academicPreviewData=null,academicLoaded=false;
+function academicMessage(text,error=false){
+ $("academicMessage").className="msg"+(error?" error":"");
+ $("academicMessage").textContent=text;
+}
+function academicFixMessage(text,error=false){
+ $("academicFixMessage").className="msg"+(error?" error":"");
+ $("academicFixMessage").textContent=text;
+}
+function academicInvalidatePreview(){
+ academicPreviewData=null;
+ $("academicPreviewBox").classList.add("hide");
+ $("academicConfirmed").checked=false;
+ $("academicApply").disabled=true;
+}
+function renderAcademicRoster(){
+ const term=$("academicSearch").value.trim().toUpperCase();
+ const filtered=academicRoster.filter(x=>!term||x.student_id.includes(term)||x.student_uid.includes(term));
+ $("academicRosterRows").innerHTML=filtered.slice(0,150).map(row=>
+  '<tr><td><code>'+esc(row.student_uid)+'</code></td>'+
+  '<td><strong>'+esc(row.student_id)+'</strong></td>'+
+  '<td>'+(row.has_pin?"등록됨":"미설정")+'</td>'+
+  '<td>'+(row.active_loan?'<span class="rental-late">대여 중</span>':"없음")+'</td></tr>'
+ ).join("")||empty(4,"해당 학년도에 등록된 학생이 없습니다.");
+}
+$("academicSearch").oninput=renderAcademicRoster;
+async function loadAcademicYear(){
+ if(!csrf)return;
+ try{
+  const data=await api("/api/admin/academic-year");
+  academicStatus=data;
+  academicRoster=data.roster;
+  academicLoaded=true;
+  $("academicCurrentYear").textContent=String(data.school_year)+"학년도";
+  $("academicNextYear").textContent=String(data.next_year)+"학년도";
+  $("academicRosterCount").textContent=String(data.roster.length)+"명";
+  renderAcademicRoster();
+  academicInvalidatePreview();
+ }catch(error){academicMessage("학년도 정보 조회 실패: "+error.message,true);}
+}
+$("yearRefresh").onclick=loadAcademicYear;
+$("academicDownload").onclick=async()=>{
+ if(!academicLoaded)await loadAcademicYear();
+ if(!academicStatus)return;
+ const lines=["student_uid\told_student_id\tnew_student_id"];
+ for(const row of academicRoster)lines.push(row.student_uid+"\t"+row.student_id+"\t");
+ const blob=new Blob([String.fromCharCode(65279)+lines.join("\r\n")],
+                     {type:"text/tab-separated-values;charset=utf-8"});
+ const url=URL.createObjectURL(blob);
+ const a=document.createElement("a");
+ a.href=url;a.download="keisung-"+academicStatus.school_year+"-to-"+academicStatus.next_year+"-roster.tsv";
+ a.click();
+ setTimeout(()=>URL.revokeObjectURL(url),1500);
+ academicMessage("전체 명단 템플릿을 내려받았어요. 새 학급을 입력하고 다시 업로드하세요.");
+};
+$("academicFile").onchange=async()=>{
+ const file=$("academicFile").files?.[0];
+ if(!file)return;
+ if(file.size>600000)return academicMessage("명단 파일은 600KB 이하만 업로드할 수 있습니다.",true);
+ try{
+  $("academicInput").value=await file.text();
+  academicInvalidatePreview();
+  academicMessage("파일을 불러왔습니다. 입력한 새 학급을 검토한 뒤 미리보기를 실행하세요.");
+ }catch(error){academicMessage("파일 읽기 실패: "+error.message,true);}
+};
+$("academicInput").oninput=academicInvalidatePreview;
+function parseAcademicEntries(){
+ const lines=$("academicInput").value.split(/\r?\n/);
+ const entries=[];
+ const errors=[];
+ for(let i=0;i<lines.length;i++){
+  let line=lines[i].trim();
+  if(!line)continue;
+  let cells=line.includes("\t")?line.split("\t"):line.split(",");
+  cells=cells.map(x=>x.trim().replace(/^"(.*)"$/,"$1"));
+  if(cells[0]==="student_uid"&&cells[1]==="old_student_id")continue;
+  if(cells.length!==3||cells.some(x=>!x)){
+   errors.push((i+1)+"행: UID·현재 학급·새 학급을 모두 작성해야 합니다.");
+   continue;
+  }
+  const [student_uid,old_student_id,new_student_id]=cells;
+  if(!/^STU-[A-F0-9]{20}$/.test(student_uid)
+     || !/^[1-6]-[1-4]-(?:[1-9]|[12][0-9]|3[0-6])$/.test(old_student_id)
+     || !(/^[1-6]-[1-4]-(?:[1-9]|[12][0-9]|3[0-6])$/.test(new_student_id)
+          ||new_student_id==="GRADUATE"||new_student_id==="LEAVE")){
+   errors.push((i+1)+"행: ID 또는 승급·졸업·전출 값의 형식을 확인하세요.");
+   continue;
+  }
+  entries.push({student_uid,old_student_id,new_student_id});
+ }
+ if(errors.length)throw new Error(errors.slice(0,5).join(" / ")+(errors.length>5?" 외 "+(errors.length-5)+"건":""));
+ if(!entries.length)throw new Error("작성된 승급 명단이 없습니다.");
+ if(entries.length>2500)throw new Error("한 번에 최대 2500명까지만 처리할 수 있습니다.");
+ return entries;
+}
+$("academicPreview").onclick=async()=>{
+ academicInvalidatePreview();
+ if(!academicStatus)await loadAcademicYear();
+ if(!academicStatus)return;
+ try{
+  const entries=parseAcademicEntries();
+  const result=await api("/api/admin/academic-year/preview",
+   {method:"POST",auth:true,body:{to_year:academicStatus.next_year,entries}});
+  academicPreviewData={entries,to_year:academicStatus.next_year,token:result.preview_token,
+                       errors:result.errors};
+  $("academicPreviewBox").classList.remove("hide");
+  $("academicPreviewStats").textContent=
+   result.from_year+" → "+result.to_year+"학년도 | 승급 "+
+   result.counts.PROMOTE+"명 · 졸업 "+result.counts.GRADUATE+"명 · 전출 "+
+   result.counts.LEAVE+"명 · 전체 "+result.roster_count+"명";
+  $("academicPreviewProblems").textContent=result.errors.length?
+   "변경 불가: "+result.errors.join(" / ")+
+    (result.omitted.length?" | 누락 학급: "+result.omitted.join(", "):""):
+   "검증 통과. 모든 학생의 매칭과 학교 공식 반 편성표를 대조한 뒤 확정하세요.";
+  $("academicApply").disabled=true;
+  if(result.errors.length){
+   academicMessage("누락·미반납 학생 등의 문제가 발견됐습니다. 수정 후 다시 미리보기를 실행하세요.",true);
+  }else academicMessage("구조 검증 통과. 최종 확인 체크 후 학년도를 변경할 수 있습니다.");
+ }catch(error){
+  academicMessage("미리보기 실패: "+error.message,true);
+ }
+};
+$("academicConfirmed").onchange=()=>{
+ $("academicApply").disabled=!$("academicConfirmed").checked
+  ||!academicPreviewData||academicPreviewData.errors.length>0;
+};
+$("academicApply").onclick=async()=>{
+ const plan=academicPreviewData;
+ if(!plan||plan.errors.length||!$("academicConfirmed").checked)return;
+ if(!confirm(plan.to_year+"학년도로 변경할까요?\n학생의 PIN과 이력은 유지되지만 학급 배정과 로그인 대상이 변경됩니다."))return;
+ if(!confirm("최종 확인: 학교 공식 새 학년도 명단과 한 명씩 대조하셨나요?\n잘못 매칭하면 다른 학생의 기록이 연결됩니다."))return;
+ const btn=$("academicApply");btn.disabled=true;
+ try{
+  const result=await api("/api/admin/academic-year/apply",
+   {method:"POST",auth:true,body:{
+     to_year:plan.to_year,entries:plan.entries,
+     preview_token:plan.token,confirmed:true
+   }});
+  academicMessage(result.school_year+"학년도 변경 완료! 승급 "+result.counts.PROMOTE+
+   "명 · 졸업 "+result.counts.GRADUATE+"명 · 전출 "+result.counts.LEAVE+
+   "명. 과거 대여 기록과 PIN은 유지됐습니다.");
+  $("academicInput").value="";
+  academicInvalidatePreview();
+  selectedPolicyStudent="";
+  $("studentPolicyDetail").classList.add("hide");
+  await refresh();
+  await loadAcademicYear();
+ }catch(error){
+  academicMessage("학년도 변경 실패: "+error.message,true);
+  btn.disabled=false;
+ }
+};
+$("academicFixApply").onclick=async()=>{
+ const student_uid=$("academicFixUid").value.trim().toUpperCase();
+ const new_student_id=$("academicFixLabel").value.trim();
+ const reason=$("academicFixReason").value.trim();
+ if(!/^STU-[A-F0-9]{20}$/.test(student_uid)
+    ||!/^[1-6]-[1-4]-(?:[1-9]|[12][0-9]|3[0-6])$/.test(new_student_id)
+    ||reason.length<5||!$("academicFixVerified").checked)
+  return academicFixMessage("UID·새 학급·사유를 작성하고 신원 확인에 체크하세요.",true);
+ if(!confirm(student_uid+" 학생을 "+new_student_id+"로 배정할까요? 신원 확인이 필수입니다."))return;
+ const btn=$("academicFixApply");btn.disabled=true;
+ try{
+  const result=await api("/api/admin/academic-year/assign",
+   {method:"POST",auth:true,body:{student_uid,new_student_id,reason,verified_identity:true}});
+  academicFixMessage(result.school_year+"학년도 "+result.student_id+" 배정 완료. 모든 기록은 유지됩니다.");
+  $("academicFixUid").value="";$("academicFixLabel").value="";
+  $("academicFixReason").value="";$("academicFixVerified").checked=false;
+  await refresh();
+  await loadAcademicYear();
+ }catch(error){academicFixMessage("개별 배정 실패: "+error.message,true);}
+ finally{btn.disabled=false;}
+};
 
 let staffAccounts=[],loadingStaff=false;
 function staffMessage(text,error=false){
