@@ -258,7 +258,7 @@ function show(n){
  if(n===1){renderTiles();}
  if(n===6){$("next").textContent="우산 QR 확인 →";$("next").disabled=!validStaffId();}
  if(n===2){$("next").textContent="PIN 만들고 계속 →";$("next").disabled=!pinSetupReady();}
- if(n===3){$("next").textContent="정보 확인 →";$("next").disabled=!/^UMB-\\d{4,}$/.test($("umbrella").value.trim().toUpperCase());}
+ if(n===3){$("next").textContent="정보 확인 →";$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase());}
  if(n===4){
   $("next").textContent=mode==="borrow"?"PIN 확인 후 대여":"PIN 확인 후 반납";
   $("next").disabled=!pinReady();
@@ -360,8 +360,8 @@ async function finalize(){
   $("doneTitle").textContent=mode==="borrow"?"대여가 완료됐어요!":"반납이 완료됐어요!";
   const date=result.due_at?new Date(result.due_at).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"long",day:"numeric",hour:"2-digit",minute:"2-digit"}):"관리자에게 문의";
   $("doneMessage").textContent=mode==="borrow"?
-   "우산을 잘 사용하고 기한 내 반납해 주세요.\\n반납 예정: "+date+
-    (role==="staff"?"":"\\n이번 달 남은 대여 횟수: "+result.remaining+"회"):
+   "우산을 잘 사용하고 기한 내 반납해 주세요.\n반납 예정: "+date+
+    (role==="staff"?"":"\n이번 달 남은 대여 횟수: "+result.remaining+"회"):
    "반납해 주셔서 고마워요.";
   show(5);await refresh();
  }catch(err){
@@ -482,6 +482,6 @@ async function startCamera(){
 $("scan").onclick=()=>{cameraFacing="environment";startCamera();};
 $("switchCamera").onclick=()=>{cameraFacing=cameraFacing==="environment"?"user":"environment";startCamera();};
 window.addEventListener("pagehide",stopScan);
-refresh();setInterval(refresh,30000);
+show(0);refresh();setInterval(refresh,30000);
 </script>
 </body></html>
