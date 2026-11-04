@@ -9,7 +9,8 @@ import secrets
 import sqlite3
 import time
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -32,6 +33,9 @@ SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
 app = FastAPI(title="Keisung Umbrella API", docs_url=None, redoc_url=None)
 app.mount("/assets", StaticFiles(directory=ROOT / "assets"), name="assets")
 STATES = {"AVAILABLE", "BORROWED", "LOST", "DAMAGED", "DISPOSED"}
+SEOUL = ZoneInfo("Asia/Seoul")
+STUDENT_RE = re.compile(r"^[1-6]-[1-4]-(?:[1-9]|[12][0-9]|3[0-6])$")
+PENALTY_POINTS = {"LOST": 3, "ACCIDENTAL_DAMAGE": 1, "INTENTIONAL_DAMAGE": 5, "WARNING": 0}
 ID_RE = re.compile(r"^UMB-\d{4,}$")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
@@ -96,12 +100,38 @@ def init_db():
             csrf TEXT NOT NULL,
             expires_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS policies (
+            key TEXT PRIMARY KEY,
+            value INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS student_allowances (
+            student_id TEXT NOT NULL,
+            month TEXT NOT NULL,
+            extra INTEGER NOT NULL DEFAULT 0,
+            updated_by TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            PRIMARY KEY(student_id,month)
+        );
+        CREATE TABLE IF NOT EXISTS penalty_actions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            student_id TEXT NOT NULL,
+            umbrella_id INTEGER REFERENCES umbrellas(id),
+            code TEXT NOT NULL,
+            points INTEGER NOT NULL,
+            reason TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            reverses_id INTEGER UNIQUE REFERENCES penalty_actions(id)
+        );
+        CREATE INDEX IF NOT EXISTS penalty_student_idx ON penalty_actions(student_id,id);
+        CREATE INDEX IF NOT EXISTS events_student_action_idx ON events(student_id,action,created_at);
         CREATE UNIQUE INDEX IF NOT EXISTS one_active_student
             ON umbrellas(borrower) WHERE borrower IS NOT NULL;
         """)
     finally:
         c.close()
     with transaction() as c:
+        c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('monthly_limit',10)")
         salt = secrets.token_bytes(16)
         # .env is the source of truth for the single bootstrap admin.
         # Updating it must also update an account that was already created in SQLite.
@@ -195,6 +225,138 @@ class StatusRequest(BaseModel):
     reason: str = Field(default="", max_length=160)
 
 
+
+def korean_month_window():
+    local = datetime.now(SEOUL)
+    start = local.replace(day=1,hour=0,minute=0,second=0,microsecond=0)
+    end = start.replace(year=start.year+1,month=1) if start.month==12 else start.replace(month=start.month+1)
+    return start.strftime("%Y-%m"),start.astimezone(timezone.utc).isoformat(),end.astimezone(timezone.utc).isoformat()
+
+
+def month_usage(c,student):
+    month,start,end=korean_month_window()
+    count=c.execute(
+        "SELECT COUNT(*) FROM events WHERE action='BORROW' AND student_id=? AND created_at>=? AND created_at<?",
+        (student,start,end)
+    ).fetchone()[0]
+    limit=c.execute("SELECT value FROM policies WHERE key='monthly_limit'").fetchone()[0]
+    row=c.execute("SELECT extra FROM student_allowances WHERE student_id=? AND month=?",(student,month)).fetchone()
+    extra=row["extra"] if row else 0
+    return {"month":month,"used":count,"limit":limit,"extra":extra,"remaining":max(0,limit+extra-count)}
+
+
+def validate_student(student):
+    if not STUDENT_RE.fullmatch(student):
+        raise HTTPException(422,"학생 정보는 1~6학년, 1~4반, 1~36번이어야 합니다.")
+    return student
+
+
+class PolicyRequest(BaseModel):
+    monthly_limit: int = Field(ge=1,le=100)
+
+
+class AllowanceRequest(BaseModel):
+    student_id: str
+    extra: int = Field(ge=0,le=100)
+
+
+class PenaltyRequest(BaseModel):
+    student_id: str
+    umbrella_id: str | None = None
+    code: str
+    reason: str = Field(min_length=5,max_length=500)
+    confirmed: bool = False
+
+
+class ReversePenaltyRequest(BaseModel):
+    reason: str = Field(min_length=5,max_length=500)
+
+
+def penalty_total(c,student):
+    return c.execute("SELECT COALESCE(SUM(points),0) FROM penalty_actions WHERE student_id=?",(student,)).fetchone()[0]
+
+
+@app.get("/api/admin/policy")
+def get_policy(request: Request):
+    require_admin(request)
+    with connect() as c:
+        return {"monthly_limit":c.execute("SELECT value FROM policies WHERE key='monthly_limit'").fetchone()[0]}
+
+
+@app.put("/api/admin/policy")
+def update_policy(data: PolicyRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    with transaction() as c:
+        c.execute("UPDATE policies SET value=? WHERE key='monthly_limit'",(data.monthly_limit,))
+    return {"ok":True,"monthly_limit":data.monthly_limit,"updated_by":actor}
+
+
+@app.get("/api/admin/student-record")
+def student_record(student_id: str,request: Request):
+    require_admin(request)
+    student=validate_student(student_id)
+    with connect() as c:
+        usage=month_usage(c,student)
+        umbrella=c.execute("SELECT id,status FROM umbrellas WHERE borrower=?",(student,)).fetchone()
+        penalties=c.execute("""SELECT id,student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id
+          FROM penalty_actions WHERE student_id=? ORDER BY id DESC LIMIT 200""",(student,)).fetchall()
+        total=penalty_total(c,student)
+    return {"student_id":student,"usage":usage,"active_umbrella":uid(umbrella["id"]) if umbrella else None,
+        "penalty_points":total,
+        "penalties":[{**dict(p),"umbrella_id":uid(p["umbrella_id"]) if p["umbrella_id"] else None} for p in penalties]}
+
+
+@app.put("/api/admin/student-allowance")
+def set_allowance(data: AllowanceRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    student=validate_student(data.student_id)
+    month,_,_=korean_month_window()
+    with transaction() as c:
+        c.execute("""INSERT INTO student_allowances(student_id,month,extra,updated_by,updated_at)
+          VALUES(?,?,?,?,?) ON CONFLICT(student_id,month) DO UPDATE SET extra=excluded.extra,
+          updated_by=excluded.updated_by,updated_at=excluded.updated_at""",
+          (student,month,data.extra,actor,now()))
+        usage=month_usage(c,student)
+    return {"ok":True,"usage":usage}
+
+
+@app.post("/api/admin/penalties")
+def add_penalty(data: PenaltyRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    student=validate_student(data.student_id)
+    if not data.confirmed:
+        raise HTTPException(422,"담당 교사의 사실관계 확인이 필요합니다.")
+    if data.code not in PENALTY_POINTS:
+        raise HTTPException(422,"지원하지 않는 패널티 유형입니다.")
+    umbrella_num=parse_id(data.umbrella_id) if data.umbrella_id else None
+    with transaction() as c:
+        if umbrella_num is not None and not c.execute("SELECT 1 FROM umbrellas WHERE id=?",(umbrella_num,)).fetchone():
+            raise HTTPException(404,"등록되지 않은 우산입니다.")
+        cur=c.execute("""INSERT INTO penalty_actions
+          (student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id)
+          VALUES(?,?,?,?,?,?,?,NULL)""",
+          (student,umbrella_num,data.code,PENALTY_POINTS[data.code],data.reason,actor,now()))
+        total=penalty_total(c,student)
+    return {"ok":True,"id":cur.lastrowid,"penalty_points":total}
+
+
+@app.post("/api/admin/penalties/{penalty_id}/reverse")
+def reverse_penalty(penalty_id: int,data: ReversePenaltyRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    with transaction() as c:
+        row=c.execute("SELECT * FROM penalty_actions WHERE id=?",(penalty_id,)).fetchone()
+        if not row or row["reverses_id"] is not None:
+            raise HTTPException(404,"해당 패널티가 없습니다.")
+        if c.execute("SELECT 1 FROM penalty_actions WHERE reverses_id=?",(penalty_id,)).fetchone():
+            raise HTTPException(409,"이미 취소된 패널티입니다.")
+        c.execute("""INSERT INTO penalty_actions
+          (student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id)
+          VALUES(?,?,?,?,?,?,?,?)""",
+          (row["student_id"],row["umbrella_id"],"REVERSAL",-row["points"],data.reason,actor,now(),penalty_id))
+        total=penalty_total(c,row["student_id"])
+    return {"ok":True,"penalty_points":total}
+
+
 @app.get("/", include_in_schema=False)
 def home():
     return FileResponse(ROOT / "kiosk.html", headers={"Cache-Control": "no-store"})
@@ -230,11 +392,14 @@ def borrow(data: StudentRequest):
             raise HTTPException(409, "이 우산은 대여할 수 없습니다.")
         if c.execute("SELECT 1 FROM umbrellas WHERE borrower=?", (student,)).fetchone():
             raise HTTPException(409, "이미 대여 중인 우산이 있습니다.")
+        usage=month_usage(c,student)
+        if usage["remaining"]<=0:
+            raise HTTPException(409, f"이번 달 대여 한도({usage['limit']}회 + 추가 {usage['extra']}회)에 도달했습니다. 담당 선생님께 문의해 주세요.")
         rental = secrets.token_hex(16)
         c.execute("UPDATE umbrellas SET status='BORROWED',borrower=?,rental_id=? WHERE id=?",
                   (student, rental, u["id"]))
         log(c, u["id"], "BORROW", student, rental, actor="self-service")
-    return {"ok": True, "id": data.umbrella_id, "status": "BORROWED"}
+    return {"ok": True, "id": data.umbrella_id, "status": "BORROWED", "remaining":usage["remaining"]-1}
 
 
 @app.post("/api/return")
