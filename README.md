@@ -78,6 +78,75 @@ Dockerfile
 .gitignore
 ```
 
+## 데이터베이스(DB) 초기화 — 테스트 환경 전용
+
+> **주의: 기존 우산 목록, 대여·반납 기록, 분실·파손 상태, 월별 대여 이용 기록, 추가 허용 횟수, 패널티 이력, 관리자 세션 및 월별 제한 설정이 모두 새 상태로 돌아갑니다.**
+>
+> **학교에서 실제 사용 중인 DB에는 실행하지 마세요.** 특히 초기화 후 우산 ID가 다시 `UMB-0001`부터 발급되므로 **기존에 출력해 붙여 둔 QR 스티커가 새로운 우산을 가리킬 수 있습니다.** 실사용에서는 전체 초기화 대신 우산별 상태 변경·관리자 패널티 취소·월별 자동 갱신을 사용하세요.
+
+### 1. 서버 완전 종료
+
+Codespaces에서 Uvicorn이 실행되는 터미널에 `Ctrl+C`를 눌러 종료하세요. **다른 터미널이나 프로세스에서 같은 DB에 접근하는 서버도 모두 종료해야 합니다.** SQLite WAL 파일이 사용 중이면 백업이나 이동 중 데이터가 손상될 수 있습니다.
+
+### 2. 원본 DB 보관 후 초기화
+
+프로젝트 루트( `server.py`가 있는 폴더)에서 아래 명령을 실행합니다. **`.env` 파일의 `DATA_DIR`을 그대로 사용**하며, 실제 DB를 삭제하는 대신 날짜별 백업 폴더로 이동합니다.
+
+```bash
+source .venv/bin/activate
+python - <<'PY'
+import os
+import shutil
+from datetime import datetime
+from pathlib import Path
+from dotenv import load_dotenv
+
+root = Path.cwd()
+if not (root / "server.py").is_file():
+    raise SystemExit("오류: server.py가 있는 프로젝트 루트에서 실행하세요.")
+load_dotenv(root / ".env", override=True)
+
+data_dir = Path(os.getenv("DATA_DIR", str(root / "data"))).resolve()
+db = data_dir / "umbrellas.db"
+if not db.is_file():
+    raise SystemExit(f"DB 파일을 찾지 못했습니다: {db}")
+
+print(f"초기화 대상: {db}")
+print("서버가 완전히 중지되었는지 확인하세요.")
+answer = input("테스트 DB를 백업하고 초기화하려면 RESET 입력: ")
+if answer != "RESET":
+    raise SystemExit("취소했습니다. 파일을 변경하지 않았습니다.")
+
+backup_dir = data_dir / "backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+backup_dir.mkdir(parents=True, exist_ok=False)
+for suffix in ("", "-wal", "-shm"):
+    path = data_dir / ("umbrellas.db" + suffix)
+    if path.exists():
+        shutil.move(str(path), str(backup_dir / path.name))
+
+print(f"이전 DB 보관 완료: {backup_dir}")
+print("서버를 재시작하면 새 DB가 자동 생성됩니다.")
+PY
+```
+
+실행 중 파일 접근 오류가 뜨면 **서버를 종료했는지 먼저 확인**하고, 백업 폴더 안의 파일들을 임의로 삭제하지 마세요. 백업에는 학생 정보가 포함될 수 있으니 외부에 공개하거나 GitHub에 커밋하면 안 됩니다.
+
+### 3. 서버 재시작
+
+```bash
+uvicorn server:app --host 0.0.0.0 --port 8000 --reload
+```
+
+최초 시작 시 `server.py`의 `init_db()`가 테이블을 새로 만들고, `.env`의 관리자 계정과 기본 **월 10회** 정책을 설정합니다. `/admin`에 다시 로그인하여 우산 목록이 비었는지 확인하세요.
+
+### 4. 이전 상태로 되돌리고 싶다면
+
+서버를 **완전히 종료한 상태에서만** 복구하세요. 새 DB를 별도로 보관하고, 위 백업 폴더에 있는 `umbrellas.db`와 같은 이름의 `-wal`, `-shm` 파일(있다면)을 **모두 함께** 원래 `DATA_DIR`로 되돌리면 됩니다. 새 DB와 백업 DB 파일을 섞지 마세요. 복구한 다음 서버를 재시작하세요.
+
+**참고:** 월별 대여 횟수는 매월 1일(한국 시간) 기준으로 자동 갱신됩니다. 월별 한도를 초기화하려고 DB 전체를 리셋할 필요는 없습니다.
+
+---
+
 ## 배포 전 필수 검토
 
 - 학생 학년/반/번호는 개인정보가 될 수 있으므로 실제 운영 전 학교 승인·보호조치·보존 기간이 필요합니다.
