@@ -224,6 +224,7 @@ function renderTiles(){
  $("next").textContent="다음 단계 →";$("next").disabled=!(grade&&klass&&number);
 }
 $("umbrella").addEventListener("input",()=>{$("umbrella").value=$("umbrella").value.toUpperCase();if(step===3)$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim());});
+const pinKeys=["1","2","3","4","5","6","7","8","9","지우기","0","←"];
 function pinSetupReady(){
  const pin=$("newStudentPin").value,confirmation=$("confirmStudentPin").value;
  return /^\d{6}$/.test(pin)&&pin===confirmation;
@@ -253,7 +254,7 @@ for(const key of pinKeys){
  $("pinSetupKeypad").append(button);
 }
 function pinReady(){return /^\d{6}$/.test($("studentPin").value);}
-const pinKeys=["1","2","3","4","5","6","7","8","9","지우기","0","←"];
+
 for(const key of pinKeys){
  const button=document.createElement("button");
  button.type="button";button.textContent=key;
