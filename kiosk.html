@@ -193,7 +193,7 @@ function renderTiles(){
  $("next").textContent="다음 단계 →";$("next").disabled=!(grade&&klass&&number);
 }
 $("umbrella").addEventListener("input",()=>{$("umbrella").value=$("umbrella").value.toUpperCase();if(step===2)$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim());});
-function pinReady(){return /^\\d{6}$/.test($("studentPin").value);}
+function pinReady(){return /^\d{6}$/.test($("studentPin").value);}
 const pinKeys=["1","2","3","4","5","6","7","8","9","지우기","0","←"];
 for(const key of pinKeys){
  const button=document.createElement("button");
@@ -208,7 +208,7 @@ for(const key of pinKeys){
  $("pinKeypad").append(button);
 }
 $("studentPin").addEventListener("input",()=>{
- $("studentPin").value=$("studentPin").value.replace(/\\D/g,"").slice(0,6);
+ $("studentPin").value=$("studentPin").value.replace(/\D/g,"").slice(0,6);
  if(step===3)$("next").disabled=!pinReady();
 });
 $("back").onclick=()=>{if(busy)return;if(step===1||step===4)show(0);else if(step===2)show(1);else if(step===3)show(2);};
