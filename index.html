@@ -71,6 +71,12 @@
 .batch-register-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
 .batch-register-form .field{width:min(270px,100%)}
 .batch-register-form .btn{min-height:45px}
+.pin-approvals-table td{vertical-align:top}.pin-approval-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pin-approval-tools input[type="text"]{max-width:158px;text-transform:uppercase;letter-spacing:.15em;font-weight:900}
+.pin-approval-verified{display:flex;gap:7px;align-items:center;font-size:12px;color:#4b5563;font-weight:750}
+.pin-approval-verified input{width:18px;height:18px;accent-color:#ff6541}
+.pending-count{display:inline-grid;place-items:center;min-width:23px;height:22px;padding:0 5px;border-radius:12px;background:#fff1e9;color:#b63b22;font-size:12px;font-weight:900}
+@media(max-width:780px){.pin-approval-tools{min-width:240px}}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -87,6 +93,7 @@
       <button type="button" data-tab="inventory"><span>▤</span> 우산 관리</button>
       <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
       <button type="button" data-tab="studentPolicy"><span>♧</span> 학생·패널티 관리</button>
+       <button type="button" data-tab="pinApprovals"><span>✓</span> PIN 등록 승인 <span id="pinPendingCount" class="pending-count hide">0</span></button>
       <a class="nav-print-link" href="/admin/print"><span>▦</span> QR 라벨 인쇄</a>
       <button type="button" data-tab="settings"><span>⚙</span> 관리 도구</button>
     </nav></div>
@@ -165,11 +172,11 @@
    <div class="pin-admin-box">
     <h3>학생 PIN 상태 및 재발급</h3>
     <p id="studentPinStatus" class="helper">PIN 상태 확인 중</p>
-    <p class="helper">PIN이 없는 학생은 키오스크에서 학년·반·번호 선택 후 직접 PIN을 만들 수 있습니다. 이미 설정한 PIN을 잊었을 때만 담당 교사가 신원을 확인한 뒤 재발급해 주세요.</p>
+    <p class="helper">PIN이 없는 학생은 키오스크에서 PIN을 신청하고 담당 교사의 승인을 받아야 사용할 수 있습니다. PIN을 잊거나 신청 코드가 없는 기존 대기 신청은 교사가 신원을 확인한 뒤 재발급해 주세요.</p>
     <label class="confirm-penalty"><input type="checkbox" id="studentPinVerified"> 담당 교사가 학생의 신원을 직접 확인했습니다.</label>
     <div class="actions"><button type="button" class="btn primary" id="issueStudentPin">관리자 PIN 발급 / 재발급</button><button type="button" class="btn hide" id="hideStudentPin">PIN 숨기기</button></div>
     <div id="studentPinOutput" class="pin-secret hide" role="status" aria-live="polite"></div>
-    <p class="helper">최초 PIN 설정에는 별도 코드가 필요하지 않습니다. 단, 다른 학생의 번호를 선점하는 문제가 생길 수 있으므로 첫 설정은 담당 교사 지도 아래 진행하세요.</p>
+    <p class="helper">학생이 새 PIN을 신청하면 8자리 신청 확인 코드가 한 번 표시됩니다. 담당 교사는 직접 신원을 확인하고 신청 코드를 대조한 뒤 PIN 등록 승인 메뉴에서 승인해 주세요.</p>
    </div>
    <div class="allowance-row">
     <div class="field"><label for="extraAllowance">이번 달 추가 대여 허용 횟수</label><input class="input" id="extraAllowance" type="number" min="0" max="100" value="0"></div>
@@ -192,7 +199,18 @@
   <div id="studentPolicyMessage" class="msg hide" role="status"></div>
  </section>
 </div>
-<div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/admin/print">▦ QR 인쇄 센터</a><a class="btn" href="/" target="_blank" rel="noopener">↗ 학생용 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
+<div id="pinApprovals" class="tab">
+   <section class="panel">
+    <div class="head"><div><h2 class="section-title">학생 최초 PIN 등록 승인</h2>
+      <p class="subtext">대면 신원 확인과 학생이 제시한 8자리 신청 확인 코드 대조 후 승인하세요.</p></div>
+      <button type="button" class="btn" id="refreshPinRequests">↻ 신청 목록 새로고침</button>
+    </div>
+    <div class="notice">승인 전에는 학생이 대여하거나 반납할 수 없습니다. 확인 코드만으로 신원이 증명되지는 않으므로 학년·반·번호를 직접 확인하세요. 기존 자기 등록 PIN은 승인 대기로 이관되며 확인 코드가 없으므로 관리자 PIN 재발급이 필요합니다.</div>
+    <div id="pinRequestsMessage" class="msg hide" role="status" aria-live="polite"></div>
+    <div class="tablewrap"><table class="pin-approvals-table"><thead><tr><th>신청 학생</th><th>신청 시간</th><th>신원 확인 · 코드</th><th>처리</th></tr></thead><tbody id="pinRequestRows"></tbody></table></div>
+   </section>
+ </div>
+ <div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/admin/print">▦ QR 인쇄 센터</a><a class="btn" href="/" target="_blank" rel="noopener">↗ 학생용 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
     <p class="fixednote">KEISUNG UMBRELLA · 관리자 접근 전용 · 서버 데이터 기준</p>
   </main>
 </div>
