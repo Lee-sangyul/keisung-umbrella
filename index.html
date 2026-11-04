@@ -220,7 +220,7 @@ const $=id=>document.getElementById(id);
 const N={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
 const A={REGISTER:"신규 등록",BORROW:"대여",RETURN:"반납",LOST:"분실 처리",DAMAGED:"파손 처리",DISPOSED:"폐기 처리",RESTORE:"복구"};
 const colors={AVAILABLE:"#31b17c",BORROWED:"#5287ee",LOST:"#ef6a74",DAMAGED:"#e6b44e",DISPOSED:"#a6aab4"};
-const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."]};
+const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."],pinApprovals:["PIN 등록 승인","학생의 최초 PIN 등록 신청을 확인하고 승인합니다."]};
 let csrf="",currentUser="",inventory=[],events=[],busy=false;
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function api(path,{method="GET",body,auth=false}={}){
@@ -233,7 +233,10 @@ async function api(path,{method="GET",body,auth=false}={}){
 function message(msg,error=false){$("adminMsg").textContent=msg;$("adminMsg").className="msg"+(error?" error":"");}
 function show(logged){$("loginScreen").classList.toggle("hide",logged);$("app").classList.toggle("hide",!logged);if(logged)$("who").textContent="● "+currentUser;}
 function changeTab(tab){for(const el of document.querySelectorAll(".tab"))el.classList.toggle("active",el.id===tab);for(const btn of document.querySelectorAll("[data-tab]"))btn.classList.toggle("active",btn.dataset.tab===tab);$("pageTitle").textContent=titles[tab][0];$("pageSubtitle").textContent=titles[tab][1];}
-for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>changeTab(b.dataset.tab);
+for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>{
+ changeTab(b.dataset.tab);
+ if(b.dataset.tab==="pinApprovals")loadPinRequests();
+};
 for(const b of document.querySelectorAll("[data-go]"))b.onclick=()=>changeTab(b.dataset.go);
 function pill(status){return '<span class="pill '+status+'">'+(N[status]||esc(status))+"</span>";}
 function empty(cols,msg="기록이 없습니다."){return '<tr><td class="empty" colspan="'+cols+'">'+esc(msg)+'</td></tr>';}
@@ -265,6 +268,7 @@ function renderEvents(){
 async function refresh(){
  const [i,e]=await Promise.all([api("/api/admin/inventory"),api("/api/admin/events")]);
  inventory=i;events=e;renderStats();renderInventory();renderEvents();
+ await loadPinRequests();
  $("penaltyUmbrella").innerHTML='<option value="">미지정</option>'+inventory.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.id)+' · '+N[x.status]+'</option>').join("");
 }
 async function authed(){
@@ -279,7 +283,7 @@ $("loginForm").onsubmit=async ev=>{
 };
 $("logout").onclick=async()=>{
  try{await api("/api/admin/logout",{method:"POST",auth:true});}catch(e){console.warn(e);}
- csrf="";inventory=[];events=[];$("studentPinOutput").textContent="";show(false);
+ csrf="";inventory=[];events=[];$("studentPinOutput").textContent="";$("pinPendingCount").classList.add("hide");show(false);
 };
 $("refresh").onclick=async()=>{try{await refresh();}catch(e){alert("새로고침 실패: "+e.message);}};
 // Student lookup uses admin-authenticated inventory data only.
@@ -397,7 +401,10 @@ async function loadPolicyStudent(id){
   $("studentPenaltyBreakdown").textContent="기본 "+data.usage.limit+"회 + 추가 "+data.usage.extra+"회 − 이번 달 패널티 "+data.usage.penalty_deduction+"회 = 실제 한도 "+data.usage.effective_limit+"회";
   $("studentPenaltyPoints").textContent=data.penalty_points+"점";
   $("extraAllowance").value=data.usage.extra;
-  $("studentPinStatus").textContent=data.has_pin?(data.pin_locked?"PIN 등록됨 · 인증 시도 잠김 (15분 대기 또는 재발급)":"PIN 등록 완료"):"PIN 미설정 · 키오스크에서 학생이 직접 설정 가능";
+  $("studentPinStatus").textContent=!data.has_pin?"PIN 미설정 · 키오스크에서 등록 신청 가능":
+    data.pin_approval_status==="PENDING"?"PIN 신청 승인 대기 · 선생님 확인 필요":
+    data.pin_approval_status==="REJECTED"?"PIN 신청 반려 · 신원 확인 후 관리자 PIN 재발급 필요":
+    data.pin_locked?"PIN 승인됨 · 인증 시도 잠김 (15분 대기 또는 재발급)":"PIN 승인됨 · 대여 및 반납 가능";
   $("studentPinOutput").classList.add("hide");
   $("studentPinOutput").textContent="";
   $("studentPinVerified").checked=false;
@@ -421,8 +428,9 @@ $("issueStudentPin").onclick=async()=>{
   $("studentPinOutput").classList.remove("hide");
   $("hideStudentPin").classList.remove("hide");
   $("studentPinVerified").checked=false;
-  $("studentPinStatus").textContent="PIN 등록 완료 · 학생에게 비공개로 전달해 주세요.";
-  if(policyRecord)policyRecord.has_pin=true;
+  $("studentPinStatus").textContent="PIN 승인 완료 · 새 PIN을 학생에게 비공개로 전달해 주세요.";
+  if(policyRecord){policyRecord.has_pin=true;policyRecord.pin_approval_status="APPROVED";}
+  await loadPinRequests();
   policyMessage("studentPolicyMessage","학생 PIN을 발급했습니다. 공유 화면에서는 PIN을 즉시 숨겨 주세요.");
  }catch(e){policyMessage("studentPolicyMessage","PIN 발급 실패: "+e.message,true);}
  finally{button.disabled=false;}
