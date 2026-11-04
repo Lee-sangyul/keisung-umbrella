@@ -85,6 +85,11 @@
 .stocktake-camera{background:#f8fafc;border:1px solid #ddd;border-radius:13px;padding:14px;max-width:520px}
 .stocktake-camera video{width:100%;max-height:300px;object-fit:contain;background:#18212b;border-radius:9px}
 @media(max-width:700px){.stocktake-result-columns{grid-template-columns:1fr}.stocktake-fields .field{max-width:none}}
+.rental-due-stats{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0 20px}
+.rental-due-stats>div{padding:15px 21px;background:#f7f8fb;border:1px solid #eceef2;border-radius:12px;font-weight:800;color:#6b7280}
+.rental-due-stats strong{font-size:26px;color:#29303d;margin-left:8px}
+.rental-late{font-weight:900;color:#b91c1c}.rental-ok{font-weight:850;color:#208256}
+#rentalRows td{vertical-align:middle}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -100,6 +105,7 @@
       <button type="button" data-tab="dashboard" class="active"><span>▦</span> 대시보드</button>
       <button type="button" data-tab="inventory"><span>▤</span> 우산 관리</button>
       <button type="button" data-tab="stocktake"><span>☷</span> 재고 실사</button>
+      <button type="button" data-tab="rentalDue"><span>◷</span> 대여 기한·연체</button>
       <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
       <button type="button" data-tab="studentPolicy"><span>♧</span> 학생·패널티 관리</button>
       <a class="nav-print-link" href="/admin/print"><span>▦</span> QR 라벨 인쇄</a>
@@ -197,6 +203,34 @@
     </div>
   </section>
 </div>
+<div id="rentalDue" class="tab">
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">대여 기한 설정</h2>
+      <p class="subtext">앞으로 대여되는 우산의 기본 반납 기한을 설정합니다.</p></div></div>
+    <div class="policy-row">
+      <div class="field"><label for="rentalDays">기본 대여 기간 (1~30일)</label>
+        <input id="rentalDays" class="input" type="number" min="1" max="30" step="1" value="7"></div>
+      <button type="button" class="btn primary" id="saveRentalDays">기간 설정 저장</button>
+    </div>
+    <p class="helper">기본값은 7일입니다. 설정 변경은 새 대여 건부터 적용되며 이미 대여된 우산의 예정일은 바뀌지 않습니다. 연체만으로 패널티를 자동 부과하지 않습니다.</p>
+    <div id="rentalDueMessage" class="msg hide" role="status" aria-live="polite"></div>
+  </section>
+  <section class="panel">
+    <div class="head"><div><h2 class="section-title">진행 중인 대여·연체 조회</h2>
+      <p class="subtext">반납 예정 시각은 한국 시간으로 표시합니다.</p></div>
+      <button type="button" class="btn" id="refreshRentals">↻ 대여 새로고침</button>
+    </div>
+    <div class="rental-due-stats" id="rentalStats"></div>
+    <div class="searchline">
+      <input class="input search" id="rentalSearch" placeholder="우산 번호 또는 학생 검색" aria-label="대여 정보 검색">
+      <select id="rentalFilter" aria-label="대여 상태 필터"><option value="all">모든 대여</option><option value="overdue">연체만</option><option value="on-time">기한 내</option></select>
+    </div>
+    <div class="tablewrap">
+      <table><thead><tr><th>우산 ID</th><th>대여 학생</th><th>대여 일시</th><th>반납 예정</th><th>상태</th><th>관리</th></tr></thead>
+      <tbody id="rentalRows"></tbody></table>
+    </div>
+  </section>
+</div>
 <div id="history" class="tab">
       <section class="panel"><div class="head"><div><h2 class="section-title">이벤트 기록</h2><p class="subtext">대여, 반납 및 관리자 변경 내역 (최근 1,000건)</p></div><button class="btn" id="download">↓ JSON 백업</button></div>
        <div class="searchline"><input class="input search" id="eventSearch" placeholder="우산·학생·담당자 검색"><select id="eventFilter" aria-label="이벤트 유형"><option value="">모든 이벤트</option><option value="BORROW">대여</option><option value="RETURN">반납</option><option value="REGISTER">등록</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="RESTORE">복구</option></select></div>
@@ -270,7 +304,7 @@ const $=id=>document.getElementById(id);
 const N={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
 const A={REGISTER:"신규 등록",BORROW:"대여",RETURN:"반납",LOST:"분실 처리",DAMAGED:"파손 처리",DISPOSED:"폐기 처리",RESTORE:"복구"};
 const colors={AVAILABLE:"#31b17c",BORROWED:"#5287ee",LOST:"#ef6a74",DAMAGED:"#e6b44e",DISPOSED:"#a6aab4"};
-const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."],stocktake:["재고 실사","학교 전체 또는 위치별 우산 수량을 확인합니다."]};
+const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."],stocktake:["재고 실사","학교 전체 또는 위치별 우산 수량을 확인합니다."],rentalDue:["대여 기한·연체","반납 예정일과 연체 현황을 관리합니다."]};
 let csrf="",currentUser="",inventory=[],events=[],busy=false;
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function api(path,{method="GET",body,auth=false}={}){
@@ -286,6 +320,7 @@ function changeTab(tab){if(tab!=="stocktake")stopStocktakeCamera();for(const el 
 for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>{
  changeTab(b.dataset.tab);
  if(b.dataset.tab==="stocktake"){renderStocktakeLocations();loadStocktakes();}
+ if(b.dataset.tab==="rentalDue")loadRentalDashboard();
 };
 for(const b of document.querySelectorAll("[data-go]"))b.onclick=()=>changeTab(b.dataset.go);
 function pill(status){return '<span class="pill '+status+'">'+(N[status]||esc(status))+"</span>";}
@@ -319,6 +354,7 @@ async function refresh(){
  const [i,e]=await Promise.all([api("/api/admin/inventory"),api("/api/admin/events")]);
  inventory=i;events=e;renderStats();renderInventory();renderEvents();
  renderStocktakeLocations();
+ if(!$("rentalDue").classList.contains("hide")&&$("rentalDue").classList.contains("active"))await loadRentals();
  $("penaltyUmbrella").innerHTML='<option value="">미지정</option>'+inventory.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.id)+' · '+N[x.status]+'</option>').join("");
 }
 async function authed(){
@@ -634,6 +670,82 @@ $("stocktakeCameraToggle").onclick=async()=>{
 };
 window.addEventListener("pagehide",stopStocktakeCamera);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")stopStocktakeCamera();});
+
+
+let rentalItems=[];
+function rentalLocal(iso){
+ return iso?new Date(iso).toLocaleString("ko-KR",{
+  timeZone:"Asia/Seoul",year:"numeric",month:"2-digit",day:"2-digit",
+  hour:"2-digit",minute:"2-digit"}):"—";
+}
+function rentalMessage(text,error=false){
+ $("rentalDueMessage").className="msg"+(error?" error":"");
+ $("rentalDueMessage").textContent=text;
+}
+async function loadRentalDashboard(){
+ if(!csrf)return;
+ try{
+  const policy=await api("/api/admin/rental-policy");
+  $("rentalDays").value=policy.rental_days;
+  await loadRentals();
+ }catch(error){rentalMessage("대여 기한 조회 실패: "+error.message,true);}
+}
+async function loadRentals(){
+ if(!csrf)return;
+ try{
+  const d=await api("/api/admin/rentals");
+  rentalItems=d.rentals;
+  $("rentalStats").innerHTML='<div>대여 중 <strong>'+d.total+'</strong>개</div>'+
+    '<div>연체 <strong class="rental-late">'+d.overdue_count+'</strong>개</div>';
+  renderRentals();
+ }catch(error){rentalMessage("대여 현황 조회 실패: "+error.message,true);}
+}
+function renderRentals(){
+ const term=$("rentalSearch").value.trim().toUpperCase(),filter=$("rentalFilter").value;
+ const found=rentalItems.filter(r=>(!term||r.umbrella_id.includes(term)||r.student_id.toUpperCase().includes(term))
+    &&(filter==="all"||(filter==="overdue"?r.overdue:!r.overdue)));
+ $("rentalRows").innerHTML=found.map(r=>
+    '<tr><td><strong>'+esc(r.umbrella_id)+'</strong></td>'+
+    '<td>'+esc(r.student_id)+'</td><td>'+esc(rentalLocal(r.borrowed_at))+'</td>'+
+    '<td>'+esc(rentalLocal(r.due_at))+'</td>'+
+    '<td>'+(r.overdue?'<span class="rental-late">연체</span>':'<span class="rental-ok">기한 내</span>')+'</td>'+
+    '<td><button class="btn" type="button" data-extend-rental="'+esc(r.rental_id)+'">기한 연장</button></td></tr>'
+  ).join("")||empty(6,"조건에 맞는 대여가 없습니다.");
+ for(const btn of $("rentalRows").querySelectorAll("[data-extend-rental]"))
+  btn.onclick=()=>extendRental(btn.dataset.extendRental);
+}
+async function extendRental(rentalId){
+ const rental=rentalItems.find(r=>r.rental_id===rentalId);
+ if(!rental)return;
+ const raw=prompt(rental.umbrella_id+" / "+rental.student_id+" 학생\n추가로 연장할 일수 (1~30)", "3");
+ if(raw===null)return;
+ const extra_days=Number(raw);
+ if(!Number.isInteger(extra_days)||extra_days<1||extra_days>30)
+  return rentalMessage("연장 일수는 1~30의 정수로 입력해 주세요.",true);
+ const reason=prompt("담당 교사가 확인한 연장 사유를 5자 이상 입력해 주세요.");
+ if(reason===null)return;
+ if(reason.trim().length<5)return rentalMessage("연장 사유는 5자 이상 입력해 주세요.",true);
+ if(!confirm(rental.umbrella_id+"의 반납 기한을 "+extra_days+"일 연장할까요?"))return;
+ try{
+  const data=await api("/api/admin/rentals/"+encodeURIComponent(rentalId)+"/extend",
+   {method:"POST",auth:true,body:{extra_days,reason:reason.trim()}});
+  rentalMessage("기한 연장 완료! 새 반납 예정: "+rentalLocal(data.due_at));
+  await loadRentals();
+ }catch(error){rentalMessage("기한 연장 실패: "+error.message,true);}
+}
+$("rentalSearch").oninput=renderRentals;
+$("rentalFilter").onchange=renderRentals;
+$("refreshRentals").onclick=loadRentalDashboard;
+$("saveRentalDays").onclick=async()=>{
+ const rental_days=Number($("rentalDays").value);
+ if(!Number.isInteger(rental_days)||rental_days<1||rental_days>30)
+  return rentalMessage("기본 대여 기간을 1~30일 정수로 입력해 주세요.",true);
+ if(!confirm("새로운 대여의 기본 반납 기한을 "+rental_days+"일로 바꿀까요?\n기존 대여는 변경되지 않습니다."))return;
+ try{
+  await api("/api/admin/rental-policy",{method:"PUT",auth:true,body:{rental_days}});
+  rentalMessage("새 대여부터 기본 "+rental_days+"일이 적용됩니다.");
+ }catch(error){rentalMessage("정책 저장 실패: "+error.message,true);}
+};
 
 const POLICY_CODES={LOST:"분실",ACCIDENTAL_DAMAGE:"과실 파손",INTENTIONAL_DAMAGE:"고의 파손",WARNING:"경고",REVERSAL:"패널티 취소"};
 let selectedPolicyStudent="",policyRecord=null;
