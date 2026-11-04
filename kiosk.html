@@ -183,15 +183,15 @@ async function api(path,body){const res=await fetch(path,{method:body?"POST":"GE
 async function finalize(){
  if(busy)return;
  busy=true;$("next").disabled=true;
- try{await api("/api/"+mode,{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade,classroom:klass,number});
+ try{const result=await api("/api/"+mode,{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade,classroom:klass,number});
    $("doneIcon").textContent="✅";$("doneTitle").textContent=mode==="borrow"?"대여가 완료됐어요!":"반납이 완료됐어요!";
-   $("doneMessage").textContent=mode==="borrow"?"우산을 잘 사용하고 반납해 주세요.":"반납해 주셔서 고마워요.";show(4);await refresh();
+   $("doneMessage").textContent=mode==="borrow"?"우산을 잘 사용하고 반납해 주세요.\n이번 달 남은 대여 횟수: "+result.remaining+"회":"반납해 주셔서 고마워요.";show(4);await refresh();
  }catch(err){$("doneIcon").textContent="⚠️";$("doneTitle").textContent="처리하지 못했어요";$("doneMessage").textContent=err.message;show(4);}
  finally{busy=false;}
 }
 $("next").onclick=()=>{if(step===1&&grade&&klass&&number)show(2);else if(step===2&&/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase()))show(3);else if(step===3)finalize();};
 async function refresh(){try{const data=await api("/api/umbrellas");$("stock").textContent="● 대여 가능 "+data.filter(x=>x.status==="AVAILABLE").length+"개";}catch{$("stock").textContent="● 연결 확인 필요";}}
-// Decode the printed umbrella ID (never student information) from live camera or an image.
+// Decode printed umbrella IDs from the live camera only; no photo uploads.
 const scanCanvas=document.createElement("canvas"),scanContext=scanCanvas.getContext("2d",{willReadFrequently:true});
 function acceptQr(value){
  const id=String(value||"").trim().toUpperCase();
