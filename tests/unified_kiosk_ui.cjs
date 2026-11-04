@@ -55,13 +55,15 @@ const $ = id => {
  return elements.get(id);
 };
 const requests=[];
+let selfEnrollmentEnabled = true;
 async function fetchStub(url, options={}) {
  const body = options.body?JSON.parse(options.body):null;
  requests.push({url,body});
  let payload;
  switch(url) {
   case "/api/umbrellas": payload = [{id:"UMB-0001",status:"AVAILABLE"}]; break;
-  case "/api/student-pin/status": payload = {has_pin:body.number!==17}; break;
+  case "/api/student-pin/status": payload = {has_pin:body.number!==17&&body.number!==18}; break;
+   case "/api/config": payload = {self_enrollment:selfEnrollmentEnabled}; break;
   case "/api/student-pin/enroll": payload = {ok:true,student_id:"6-4-17"}; break;
   case "/api/borrow":
   case "/api/staff/borrow":
@@ -182,6 +184,14 @@ const click=async(id)=>{assert.equal(typeof $(id).onclick,"function","Clickable 
  await click("next");
  assert.equal(run("step"),3,"student registration is immediately usable");
  assert.ok(requests.some(r=>r.url==="/api/student-pin/enroll"&&r.body.number===17));
+
+  // Production must refuse unverified first-time PIN registration in the kiosk.
+  await click("back");
+  selfEnrollmentEnabled = false;
+  run("grade=6;klass=4;number=18;");
+  await click("next");
+  assert.equal(run("step"),1,"production enrollment remains on student identification");
+  assert.ok(!requests.some(r=>r.url==="/api/student-pin/enroll"&&r.body.number===18));
 
  console.log("Unified kiosk UI checks passed: action-first flow, role choice, back navigation, staff/student borrow, staff return, student first PIN.");
 })().catch(error=>{console.error(error);process.exitCode=1;});
