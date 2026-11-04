@@ -1,49 +1,181 @@
-<!doctype html><html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Keisung Umbrella</title><style>
-:root{font-family:system-ui,-apple-system,"Malgun Gothic",sans-serif;background:#f1f5fa;color:#173047}*{box-sizing:border-box}body{margin:0}header{background:#12334b;color:white;padding:24px}header>div,main{max-width:900px;margin:auto}h1{margin:0;font-size:25px}header p{margin:7px 0 0;color:#d5e4ef}main{padding:16px}.card{background:white;border-radius:15px;padding:20px;margin:15px 0;border:1px solid #dee7ed;box-shadow:0 5px 20px #102d4210}h2{font-size:19px;margin:0 0 15px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:13px}.field{margin-bottom:14px}label{display:block;margin-bottom:6px;font-weight:600;font-size:14px}input,select{font:inherit;padding:12px;border:1px solid #adbdca;border-radius:9px;width:100%;background:white}button,.link{font:inherit;border:0;border-radius:9px;padding:11px 15px;background:#e8edf2;color:#12334b;cursor:pointer;font-weight:650}button.main{background:#1471b0;color:white}button.danger{background:#ba3346;color:white}.actions{display:flex;flex-wrap:wrap;gap:9px}a{color:#176eac}.muted{color:#657c8d;font-size:13px;line-height:1.6}.msg{background:#e7f3ff;color:#14527a;border-radius:10px;padding:13px;margin-top:12px;white-space:pre-wrap}.msg.error{background:#ffe8eb;color:#982b3f}.pill{border-radius:15px;padding:4px 9px;background:#e4ecf2;font-size:12px}.AVAILABLE{background:#dcf6e8;color:#19633d}.BORROWED{background:#deecff;color:#155385}.LOST{background:#ffe0e4;color:#963441}.DAMAGED{background:#fff0d1;color:#855812}.DISPOSED{background:#e5e5e5;color:#555}table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:10px;border-bottom:1px solid #e1e9ef} .scroll{overflow:auto}.hide{display:none!important}.notice{background:#fff2cf;color:#74520d;padding:12px 15px;border-radius:10px;margin:12px 0}video{width:100%;max-height:270px;background:#111;border-radius:12px}.stat{background:#fff;border:1px solid #e1e9ef;border-radius:12px;padding:14px}.stat b{font-size:24px;display:block}footer{text-align:center;padding:20px;color:#667b8c;font-size:12px}
-/* v0.5: compact admin session toolbar */
-#adminBody>.card:first-child{padding:13px 22px;margin:12px 0}
-#adminBody>.card:first-child .actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-height:48px}
-#adminBody>.card:first-child b{font-size:17px;line-height:1.25}
-#adminBody>.card:first-child button,#adminBody>.card:first-child a{min-height:43px;display:inline-flex;align-items:center;justify-content:center;padding:8px 15px;border-radius:11px;font-size:15px;line-height:1.2;text-decoration:none}
-@media(max-width:500px){#adminBody>.card:first-child{padding:12px 14px}#adminBody>.card:first-child .actions{gap:8px}#adminBody>.card:first-child b{flex-basis:100%}}
-</style></head>
-<body><header><div><h1>☂️ Keisung Umbrella</h1><p id="subtitle">학교 우산 대여 · 반납</p></div></header><main>
-<div class="notice">학교 운영 전 관리자 승인과 개인정보 보호 검토가 필요합니다. 학년·반·번호만으로는 본인 인증이 되지 않습니다.</div>
-<section id="publicPage">
-<div class="card"><h2>우산 대여 · 반납</h2><div class="field"><label for="umbrella">우산 ID (QR 스캔 또는 입력)</label><input id="umbrella" placeholder="UMB-0001" maxlength="30" autocomplete="off"></div><div class="actions"><button id="scan">📷 QR 스캔</button><button class="hide" id="stop">스캔 종료</button></div><video id="video" playsinline muted class="hide"></video><p class="muted">카메라는 HTTPS 환경과 지원 브라우저에서 작동합니다.</p>
-<div class="grid"><div class="field"><label for="grade">학년</label><select id="grade"></select></div><div class="field"><label for="classroom">반</label><select id="classroom"></select></div><div class="field"><label for="number">번호</label><select id="number"></select></div></div>
-<div class="actions"><button id="borrow" class="main">대여하기</button><button id="return">반납하기</button></div><div class="msg" id="publicMsg" role="status">QR 코드를 스캔하거나 ID를 입력하세요.</div></div>
-<div class="card"><h2>우산 현황</h2><div id="summary" class="grid"></div><div class="scroll"><table><thead><tr><th>우산</th><th>상태</th></tr></thead><tbody id="publicTable"></tbody></table></div></div><p><a href="/admin">관리자 페이지</a></p></section>
-<section id="adminPage" class="hide">
-<div id="loginCard" class="card"><h2>관리자 로그인</h2><form id="loginForm"><div class="field"><label for="username">관리자 ID</label><input required id="username" autocomplete="username"></div><div class="field"><label for="password">비밀번호</label><input required id="password" type="password" autocomplete="current-password"></div><button class="main" type="submit">로그인</button></form><div class="msg hide" id="loginMsg"></div></div>
-<div id="adminBody" class="hide"><div class="card"><div class="actions"><b id="who"></b><button id="logout">로그아웃</button><a href="/">대여 화면</a></div></div>
-<div class="card"><h2>관리자 우산 관리</h2><p class="muted">우산은 삭제되지 않으며 ID는 계속 증가합니다. 폐기 상태는 복구할 수 없습니다.</p><div class="actions"><button class="main" id="register">+ 신규 우산 등록</button><button id="download">JSON 백업</button></div>
-<div class="field" style="margin-top:16px"><label for="adminId">우산 선택</label><select id="adminId"></select></div><div class="field"><label for="state">상태 변경</label><select id="state"><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="AVAILABLE">대여 가능으로 복구</option></select></div><div class="field"><label for="reason">처리 사유</label><input id="reason" maxlength="160"></div><button class="danger" id="change">상태 변경 확인</button><div class="msg" id="adminMsg">관리자 권한으로 상태를 변경할 수 있습니다.</div></div>
-<div class="card"><h2>최근 이벤트 로그</h2><div class="scroll"><table><thead><tr><th>시간</th><th>우산</th><th>이벤트</th><th>학생</th><th>담당</th></tr></thead><tbody id="events"></tbody></table></div></div></div></section>
-</main><footer>Keisung Umbrella · Server MVP</footer><script>
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#ff6541"><title>계성 우산 · 관리자</title><link rel="icon" href="/assets/keisung-icon-64.png">
+<style>
+:root{font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;color:#252735;background:#f7f8fb;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #ff7c5b;outline-offset:2px}
+.hide{display:none!important}.layout{min-height:100dvh;display:grid;grid-template-columns:238px minmax(0,1fr)}
+.sidebar{background:#fff;border-right:1px solid #ebedf2;padding:27px 18px;display:flex;flex-direction:column;gap:30px}
+.logo{display:flex;align-items:center;gap:11px;text-decoration:none;color:#222630;font-weight:950;font-size:20px;white-space:nowrap}
+.logo img{width:45px;height:45px;border-radius:13px}
+.side-label{color:#9b9da9;font-size:11px;font-weight:900;letter-spacing:.1em;margin:0 12px 9px}
+.nav{display:grid;gap:6px}.nav button{background:transparent;border:0;color:#686b7b;min-height:49px;text-align:left;padding:12px 15px;border-radius:12px;font-weight:800;display:flex;align-items:center;gap:12px;font-size:15px}
+.nav button.active{background:#fff0ea;color:#ef5d37}
+.nav svg,.toolbar svg{width:19px;height:19px;flex:none}
+.side-bottom{margin-top:auto;border-top:1px solid #eee;padding-top:16px;font-size:13px;color:#797d8c;display:grid;gap:10px}.side-bottom a{color:#626675;text-decoration:none}
+.main{min-width:0;padding:clamp(18px,2.5vw,42px);max-width:1700px;width:100%;margin:auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:15px;margin-bottom:30px}.eyebrow{font-size:12px;color:#ff6541;font-weight:900;letter-spacing:.11em;margin:0 0 7px}.title{font-size:clamp(26px,2.5vw,37px);letter-spacing:-.06em;font-weight:950;margin:0}.subtitle{margin:9px 0 0;color:#868998;font-weight:600;font-size:14px}
+.toolbar{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.btn{min-height:43px;border:1px solid #e4e5eb;background:#fff;border-radius:12px;padding:10px 15px;font-weight:800;font-size:14px;color:#424653;display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none}
+.btn.primary{background:#ff6541;border-color:#ff6541;color:white}.btn.danger{background:#fff0f0;color:#bd3b4d;border-color:#f3d6d7}.btn:hover{filter:brightness(.97)}
+.session{border-radius:999px;background:#fff;padding:11px 15px;font-size:13px;font-weight:800;border:1px solid #e9eaf0}
+.panel{background:#fff;border-radius:19px;border:1px solid #eceef2;padding:clamp(17px,2vw,25px);box-shadow:0 5px 24px #17203907;margin-bottom:18px}
+.stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:18px}
+.stat{background:white;padding:21px 23px;border-radius:18px;border:1px solid #eceef2;min-height:143px;display:flex;flex-direction:column;gap:12px;position:relative;overflow:hidden}
+.stat-label{font-size:14px;font-weight:800;color:#777b89}.stat strong{font-size:clamp(29px,3vw,43px);font-weight:950;line-height:1;letter-spacing:-.06em}.stat small{color:#9a9ca8;font-size:12px;font-weight:650}
+.stat .glyph{position:absolute;right:18px;top:18px;color:#bec3cd;font-size:22px}.stat.highlight{background:#ff6541;border-color:#ff6541;color:white}.stat.highlight .stat-label,.stat.highlight small,.stat.highlight .glyph{color:#fff9}
+.section-title{font-size:20px;font-weight:950;letter-spacing:-.035em;margin:0}.head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}.subtext{font-size:13px;color:#999ca9;font-weight:650;margin:5px 0 0}
+.dual{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(310px,.75fr);gap:18px}.distribution{display:flex;height:17px;overflow:hidden;border-radius:99px;background:#f2f3f5;margin:19px 0}.distribution div{min-width:0}.legend{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.legend span{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800;color:#707480}.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.activity{display:grid;gap:0}.activity-item{display:flex;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid #f1f1f4}.activity-item:last-child{border:0}.bubble{width:36px;height:36px;border-radius:11px;background:#fff0e9;color:#ff6541;display:grid;place-items:center;font-size:18px;flex:none}.activity-item strong{font-size:13px}.activity-item small{display:block;color:#989ba6;font-size:11px;margin-top:4px}
+.searchline{display:flex;align-items:center;justify-content:space-between;gap:11px;flex-wrap:wrap;margin-bottom:17px}.filters{display:flex;gap:9px;flex-wrap:wrap}.input,select{border:1px solid #e3e4eb;border-radius:11px;background:white;min-height:44px;padding:10px 13px;color:#343745}.search{width:min(100%,265px)}
+.tablewrap{overflow:auto}table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}thead th{padding:13px 11px;color:#8a8d9a;font-weight:800;background:#fafafb;white-space:nowrap}tbody td{padding:16px 11px;border-bottom:1px solid #f0f1f3;color:#505360}tbody tr:last-child td{border-bottom:0}td strong{color:#2e303b;font-weight:850}.pill{border-radius:99px;padding:6px 11px;font-size:12px;font-weight:850;white-space:nowrap;display:inline-block}.AVAILABLE{background:#e6f8ee;color:#1f8b5c}.BORROWED{background:#e9f0ff;color:#3869b7}.LOST{background:#ffeded;color:#c3464b}.DAMAGED{background:#fff4dd;color:#ad7622}.DISPOSED{background:#edf0f2;color:#777d86}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:7px}.field.wide{grid-column:1/-1}.field label{color:#676b78;font-size:13px;font-weight:800}.field input,.field select{width:100%}.helper{color:#9b9dab;font-size:12px;line-height:1.6}.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}.notice{border-radius:12px;background:#fff6eb;color:#9b662d;padding:13px 16px;font-size:13px;line-height:1.6;margin-bottom:18px}
+.msg{border-radius:10px;background:#ebf7f0;color:#216941;padding:13px 15px;font-weight:750;font-size:13px;margin-top:14px}.msg.error{background:#fff0f0;color:#ad3a45}.empty{text-align:center;color:#9a9eaa;padding:32px!important}
+.login-wrap{min-height:100dvh;display:grid;place-items:center;padding:20px;background:radial-gradient(circle at 5% 10%,#ffede5,transparent 40%),#f8f9fb}
+.login{width:min(100%,440px);padding:34px;background:white;border:1px solid #ececf2;border-radius:25px;box-shadow:0 15px 60px #22223210}
+.login .logo{margin-bottom:35px}.login h1{font-size:27px;margin:0 0 9px}.login p{color:#878b98;margin:0 0 25px;font-size:14px}.login .field{margin-bottom:16px}.login button{width:100%;margin-top:11px;min-height:52px}
+.tab{display:none}.tab.active{display:block}.fixednote{font-size:12px;color:#8b8d9a;margin:24px 0 0;line-height:1.6}
+@media(max-width:1180px){.layout{grid-template-columns:190px minmax(0,1fr)}.sidebar{padding:20px 12px}.dual{grid-template-columns:1fr}.stat{min-height:130px}.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:780px){.layout{grid-template-columns:1fr}.sidebar{padding:12px 16px;gap:13px;border-right:0;border-bottom:1px solid #eceef2}.nav{display:flex;overflow-x:auto}.nav button{white-space:nowrap}.side-label,.side-bottom{display:none}.main{padding:16px}.topbar{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stat{min-height:116px;padding:16px}.stat strong{font-size:32px}.formgrid{grid-template-columns:1fr}}
+@media(max-width:410px){.stats{gap:8px}.stat{padding:14px}.stat-label{font-size:12px}.toolbar{width:100%}.toolbar .btn{flex:1}.legend{grid-template-columns:1fr}}
+</style></head><body>
+<div id="loginScreen" class="login-wrap">
+  <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
+  <form id="loginForm"><div class="field"><label for="username">관리자 아이디</label><input class="input" id="username" required autocomplete="username"></div><div class="field"><label for="password">비밀번호</label><input class="input" type="password" id="password" required autocomplete="current-password"></div><button class="btn primary" type="submit">관리자 로그인</button></form>
+  <div id="loginMsg" class="msg error hide" role="alert"></div>
+  <p class="fixednote">학교 승인 전 테스트용 서비스입니다. 로그인 정보는 공유하지 마세요.</p>
+  </div>
+</div>
+<div id="app" class="layout hide">
+  <aside class="sidebar">
+    <a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a>
+    <div><p class="side-label">MANAGEMENT</p><nav class="nav" aria-label="관리 메뉴">
+      <button type="button" data-tab="dashboard" class="active"><span>▦</span> 대시보드</button>
+      <button type="button" data-tab="inventory"><span>▤</span> 우산 관리</button>
+      <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
+      <button type="button" data-tab="settings"><span>⚙</span> 관리 도구</button>
+    </nav></div>
+    <div class="side-bottom"><span>학교 공용 우산 관리 시스템</span><a href="/">↗ 학생용 키오스크 열기</a></div>
+  </aside>
+  <main class="main">
+    <div class="topbar"><div><p class="eyebrow">SCHOOL MANAGEMENT</p><h1 class="title" id="pageTitle">대시보드</h1><p class="subtitle" id="pageSubtitle">학교 우산 현황을 한눈에 확인하세요.</p></div>
+    <div class="toolbar"><span class="session" id="who">관리자</span><button class="btn" id="refresh" type="button">↻ 새로고침</button><button class="btn" id="logout" type="button">로그아웃</button></div></div>
+    <div class="notice">학생의 학년·반·번호는 개인정보에 해당할 수 있습니다. 운영 전 학교 승인 및 학생 인증, 개인정보 보존 정책을 확인하세요.</div>
+    <div id="dashboard" class="tab active">
+      <div class="stats" id="stats"></div>
+      <div class="dual">
+        <section class="panel"><div class="head"><div><h2 class="section-title">우산 상태 분포</h2><p class="subtext">현재 등록된 모든 우산 기준</p></div></div><div class="distribution" id="distribution"></div><div class="legend" id="legend"></div></section>
+        <section class="panel"><div class="head"><div><h2 class="section-title">최근 활동</h2><p class="subtext">가장 최근 처리된 이벤트</p></div></div><div id="recentActivity" class="activity"></div></section>
+      </div>
+      <section class="panel"><div class="head"><div><h2 class="section-title">대여 중인 우산</h2><p class="subtext">현재 반납되지 않은 우산</p></div><button class="btn" data-go="inventory">전체 보기</button></div><div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>대여 학생</th><th>상태</th></tr></thead><tbody id="borrowedRows"></tbody></table></div></section>
+    </div>
+    <div id="inventory" class="tab">
+      <section class="panel">
+       <div class="head"><div><h2 class="section-title">우산 목록</h2><p class="subtext">우산은 삭제하지 않으며 고유 ID가 유지됩니다.</p></div><button class="btn primary" id="register">＋ 우산 등록</button></div>
+       <div class="searchline"><input class="input search" id="search" placeholder="우산 ID 검색 (예: UMB-0001)" aria-label="우산 검색"><div class="filters"><select id="filter" aria-label="상태 필터"><option value="">전체 상태</option><option value="AVAILABLE">대여 가능</option><option value="BORROWED">대여 중</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option></select></div></div>
+       <div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>상태</th><th>대여 학생</th><th>관리</th></tr></thead><tbody id="inventoryRows"></tbody></table></div>
+      </section>
+      <section class="panel" id="manageCard"><div class="head"><div><h2 class="section-title">상태 변경</h2><p class="subtext">분실·파손·폐기 처리 또는 복구</p></div></div>
+        <div class="formgrid"><div class="field"><label for="adminId">우산 ID</label><select id="adminId"></select></div><div class="field"><label for="state">변경할 상태</label><select id="state"><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="AVAILABLE">대여 가능으로 복구</option></select></div><div class="field wide"><label for="reason">사유 (선택)</label><input class="input" id="reason" maxlength="160" placeholder="예: 1층 우산함에서 발견"></div></div>
+        <div class="actions"><button class="btn danger" id="change">상태 변경 확인</button></div><p class="helper">폐기는 되돌릴 수 없습니다. 분실 또는 파손 상태의 우산만 대여 가능 상태로 복구할 수 있습니다.</p><div id="adminMsg" class="msg hide" role="status"></div>
+      </section>
+    </div>
+    <div id="history" class="tab">
+      <section class="panel"><div class="head"><div><h2 class="section-title">이벤트 기록</h2><p class="subtext">대여, 반납 및 관리자 변경 내역 (최근 1,000건)</p></div><button class="btn" id="download">↓ JSON 백업</button></div>
+       <div class="searchline"><input class="input search" id="eventSearch" placeholder="우산·학생·담당자 검색"><select id="eventFilter" aria-label="이벤트 유형"><option value="">모든 이벤트</option><option value="BORROW">대여</option><option value="RETURN">반납</option><option value="REGISTER">등록</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="RESTORE">복구</option></select></div>
+       <div class="tablewrap"><table><thead><tr><th>처리 시간</th><th>우산 ID</th><th>이벤트</th><th>학생</th><th>담당자</th><th>사유</th></tr></thead><tbody id="eventRows"></tbody></table></div>
+      </section>
+    </div>
+    <div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/" target="_blank" rel="noopener">↗ 학생용 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
+    <p class="fixednote">KEISUNG UMBRELLA · 관리자 접근 전용 · 서버 데이터 기준</p>
+  </main>
+</div>
+<script>
 "use strict";
-const $=id=>document.getElementById(id),names={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"},actions={REGISTER:"등록",BORROW:"대여",RETURN:"반납",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기",RESTORE:"복구"};
-let csrf="",sessionName="",stream=null,scanTimer=null,scanBusy=false;
-const adminLocation=location.pathname.replace(/\/$/,"")==="/admin";
-$("publicPage").classList.toggle("hide",adminLocation);$("adminPage").classList.toggle("hide",!adminLocation);$("subtitle").textContent=adminLocation?"관리자 관리 시스템":"학교 우산 대여 · 반납";
-for(const [id,count,label] of [["grade",6,"학년"],["classroom",12,"반"],["number",40,"번"]])for(let i=1;i<=count;i++)$(id).add(new Option(i+label,String(i)));
-async function api(path,{method="GET",body,auth=false}={}){const headers={};if(body!==undefined)headers["Content-Type"]="application/json";if(auth&&method!=="GET")headers["X-CSRF-Token"]=csrf;let res;try{res=await fetch(path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),credentials:"same-origin",cache:"no-store"});}catch{throw Error("서버 연결에 실패했습니다.");}const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(typeof data.detail==="string"?data.detail:"요청에 실패했습니다. ("+res.status+")");return data;}
-function message(id,text,error=false){$(id).textContent=text;$(id).className="msg"+(error?" error":"");}
-function escapeHtml(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function details(){return{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade:Number($("grade").value),classroom:Number($("classroom").value),number:Number($("number").value)};}
-async function loadUmbrellas(){const items=await api("/api/umbrellas");let counts=Object.fromEntries(Object.keys(names).map(k=>[k,0]));items.forEach(x=>counts[x.status]++);$("summary").innerHTML='<div class="stat">등록 우산<b>'+items.length+'</b></div>'+Object.keys(names).map(k=>'<div class="stat">'+names[k]+'<b>'+counts[k]+'</b></div>').join("");$("publicTable").innerHTML=items.map(x=>'<tr><td>'+escapeHtml(x.id)+'</td><td><span class="pill '+x.status+'">'+names[x.status]+'</span></td></tr>').join("")||'<tr><td colspan="2">등록된 우산이 없습니다.</td></tr>';const prev=$("adminId").value;$("adminId").innerHTML=items.map(x=>'<option value="'+escapeHtml(x.id)+'">'+escapeHtml(x.id)+' · '+names[x.status]+'</option>').join("");if(items.some(x=>x.id===prev))$("adminId").value=prev;return items;}
-async function rental(action){const data=details();if(!/^UMB-\d{4,}$/.test(data.umbrella_id))return message("publicMsg","유효한 우산 ID를 입력해 주세요.",true);if(!confirm(data.grade+"학년 "+data.classroom+"반 "+data.number+"번: "+data.umbrella_id+"을(를) "+(action==="borrow"?"대여":"반납")+"할까요?"))return;try{await api("/api/"+action,{method:"POST",body:data});message("publicMsg",action==="borrow"?"대여 완료!":"반납 완료!");await loadUmbrellas();}catch(e){message("publicMsg",e.message,true);}}
-$("borrow").onclick=()=>rental("borrow");$("return").onclick=()=>rental("return");
-function stopScan(){if(scanTimer)clearInterval(scanTimer);scanTimer=null;if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;$("video").srcObject=null;$("video").classList.add("hide");$("stop").classList.add("hide");$("scan").classList.remove("hide");}
-$("stop").onclick=stopScan;$("scan").onclick=async()=>{if(!("BarcodeDetector" in window)||!navigator.mediaDevices)return message("publicMsg","이 브라우저에서는 QR 스캔을 지원하지 않습니다. ID를 직접 입력해 주세요.",true);try{const detector=new BarcodeDetector({formats:["qr_code"]});stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});$("video").srcObject=stream;await $("video").play();$("video").classList.remove("hide");$("stop").classList.remove("hide");$("scan").classList.add("hide");scanTimer=setInterval(async()=>{if(scanBusy||!stream)return;scanBusy=true;try{const found=await detector.detect($("video"));if(found.length){const value=found[0].rawValue.trim().toUpperCase();stopScan();if(/^UMB-\d{4,}$/.test(value)){$("umbrella").value=value;message("publicMsg",value+" 인식 완료. 대여 또는 반납을 확인해 주세요.");}else message("publicMsg","우산 ID가 아닌 QR 코드입니다.",true);}}catch(e){console.warn(e);}finally{scanBusy=false;}},350);}catch{stopScan();message("publicMsg","카메라 접근에 실패했습니다.",true);}};
-window.addEventListener("pagehide",stopScan);
-async function checkLogin(){try{const data=await api("/api/admin/me");csrf=data.csrf;sessionName=data.username;showAdmin(true);await adminRefresh();}catch{showAdmin(false);}}
-function showAdmin(logged){$("loginCard").classList.toggle("hide",logged);$("adminBody").classList.toggle("hide",!logged);$("who").textContent=logged?"관리자: "+sessionName:"";}
-$("loginForm").onsubmit=async e=>{e.preventDefault();try{const data=await api("/api/admin/login",{method:"POST",body:{username:$("username").value,password:$("password").value}});csrf=data.csrf;sessionName=data.username;$("password").value="";showAdmin(true);await adminRefresh();}catch(err){$("loginMsg").classList.remove("hide");message("loginMsg",err.message,true);}};
-$("logout").onclick=async()=>{try{await api("/api/admin/logout",{method:"POST",auth:true});}catch(e){console.warn(e);}csrf="";sessionName="";showAdmin(false);};
-async function adminRefresh(){await loadUmbrellas();const rows=await api("/api/admin/events");$("events").innerHTML=rows.map(r=>'<tr><td>'+escapeHtml(new Date(r.created_at).toLocaleString("ko-KR"))+'</td><td>'+escapeHtml(r.umbrella_id)+'</td><td>'+escapeHtml(actions[r.action]||r.action)+'</td><td>'+escapeHtml(r.student_id||"-")+'</td><td>'+escapeHtml(r.actor)+'</td></tr>').join("")||'<tr><td colspan="5">기록 없음</td></tr>';}
-$("register").onclick=async()=>{if(!confirm("새 우산을 등록할까요? ID는 삭제하거나 재사용할 수 없습니다."))return;try{const r=await api("/api/admin/umbrellas",{method:"POST",auth:true});await adminRefresh();$("adminId").value=r.id;message("adminMsg",r.id+" 등록 완료");}catch(e){message("adminMsg",e.message,true);}};
-$("change").onclick=async()=>{const id=$("adminId").value,status=$("state").value,reason=$("reason").value;if(!id)return message("adminMsg","우산을 선택해 주세요.",true);if(!confirm(id+" 상태를 "+names[status]+"(으)로 변경할까요?"))return;try{await api("/api/admin/umbrellas/"+encodeURIComponent(id),{method:"PATCH",auth:true,body:{status,reason}});$("reason").value="";await adminRefresh();message("adminMsg",id+" 상태 변경 완료");}catch(e){message("adminMsg",e.message,true);}};
-$("download").onclick=async()=>{try{const res=await fetch("/api/admin/export",{credentials:"same-origin",cache:"no-store"});if(!res.ok)throw Error("백업 다운로드 실패");const blob=await res.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="umbrella-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1500);}catch(e){message("adminMsg",e.message,true);}};
-if(adminLocation)checkLogin();else loadUmbrellas().catch(e=>message("publicMsg",e.message,true));
+const $=id=>document.getElementById(id);
+const N={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
+const A={REGISTER:"신규 등록",BORROW:"대여",RETURN:"반납",LOST:"분실 처리",DAMAGED:"파손 처리",DISPOSED:"폐기 처리",RESTORE:"복구"};
+const colors={AVAILABLE:"#31b17c",BORROWED:"#5287ee",LOST:"#ef6a74",DAMAGED:"#e6b44e",DISPOSED:"#a6aab4"};
+const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."]};
+let csrf="",currentUser="",inventory=[],events=[],busy=false;
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+async function api(path,{method="GET",body,auth=false}={}){
+ const headers={};if(body!==undefined)headers["Content-Type"]="application/json";if(auth)headers["X-CSRF-Token"]=csrf;
+ const response=await fetch(path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),credentials:"same-origin",cache:"no-store"});
+ const data=await response.json().catch(()=>({}));
+ if(!response.ok)throw Error(typeof data.detail==="string"?data.detail:"요청에 실패했습니다. ("+response.status+")");
+ return data;
+}
+function message(msg,error=false){$("adminMsg").textContent=msg;$("adminMsg").className="msg"+(error?" error":"");}
+function show(logged){$("loginScreen").classList.toggle("hide",logged);$("app").classList.toggle("hide",!logged);if(logged)$("who").textContent="● "+currentUser;}
+function changeTab(tab){for(const el of document.querySelectorAll(".tab"))el.classList.toggle("active",el.id===tab);for(const btn of document.querySelectorAll("[data-tab]"))btn.classList.toggle("active",btn.dataset.tab===tab);$("pageTitle").textContent=titles[tab][0];$("pageSubtitle").textContent=titles[tab][1];}
+for(const b of document.querySelectorAll("[data-tab]"))b.onclick=()=>changeTab(b.dataset.tab);
+for(const b of document.querySelectorAll("[data-go]"))b.onclick=()=>changeTab(b.dataset.go);
+function pill(status){return '<span class="pill '+status+'">'+(N[status]||esc(status))+"</span>";}
+function empty(cols,msg="기록이 없습니다."){return '<tr><td class="empty" colspan="'+cols+'">'+esc(msg)+'</td></tr>';}
+function renderStats(){
+ const counts=Object.fromEntries(Object.keys(N).map(k=>[k,inventory.filter(x=>x.status===k).length]));
+ const stats=[["전체 우산",inventory.length,"▦","highlight"],["대여 가능",counts.AVAILABLE,"✓",""],["대여 중",counts.BORROWED,"↗",""],["분실",counts.LOST,"!",""],["파손",counts.DAMAGED,"⌁",""],["폐기",counts.DISPOSED,"×",""]];
+ $("stats").innerHTML=stats.map(([label,value,icon,variant])=>'<article class="stat '+variant+'"><span class="stat-label">'+label+'</span><strong>'+value+'<small> 개</small></strong><span class="glyph">'+icon+'</span></article>').join("");
+ const total=inventory.length||1;
+ $("distribution").innerHTML=Object.keys(N).map(k=>'<div title="'+N[k]+': '+counts[k]+'개" style="width:'+(100*counts[k]/total)+'%;background:'+colors[k]+'"></div>').join("");
+ $("legend").innerHTML=Object.keys(N).map(k=>'<span><i class="dot" style="background:'+colors[k]+'"></i>'+N[k]+' · '+counts[k]+'개</span>').join("");
+ $("borrowedRows").innerHTML=inventory.filter(x=>x.status==="BORROWED").slice(0,8).map(x=>'<tr><td><strong>'+esc(x.id)+'</strong></td><td>'+esc(x.borrower||"—")+'</td><td>'+pill(x.status)+'</td></tr>').join("")||empty(3,"현재 대여 중인 우산이 없습니다.");
+ $("recentActivity").innerHTML=events.slice(0,5).map(e=>'<div class="activity-item"><span class="bubble">'+(e.action==="RETURN"?"✓":e.action==="BORROW"?"↗":"●")+'</span><div><strong>'+esc(e.umbrella_id)+' · '+esc(A[e.action]||e.action)+'</strong><small>'+esc(new Date(e.created_at).toLocaleString("ko-KR"))+'</small></div></div>').join("")||'<p class="subtext">아직 처리 기록이 없습니다.</p>';
+}
+function renderInventory(){
+ const search=$("search").value.trim().toUpperCase(),status=$("filter").value;
+ const items=inventory.filter(x=>(!search||x.id.includes(search))&&(!status||x.status===status));
+ $("inventoryRows").innerHTML=items.map(x=>'<tr><td><strong>'+esc(x.id)+'</strong></td><td>'+pill(x.status)+'</td><td>'+esc(x.borrower||"—")+'</td><td><button class="btn" data-id="'+esc(x.id)+'" '+(x.status==="DISPOSED"?"disabled":"")+'>관리</button></td></tr>').join("")||empty(4,"검색된 우산이 없습니다.");
+ for(const b of $("inventoryRows").querySelectorAll("[data-id]"))b.onclick=()=>{$("adminId").value=b.dataset.id;$("manageCard").scrollIntoView({behavior:"smooth",block:"center"});};
+ const prev=$("adminId").value;
+ $("adminId").innerHTML=inventory.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.id)+" · "+N[x.status]+"</option>").join("");
+ if(inventory.some(x=>x.id===prev))$("adminId").value=prev;
+}
+function renderEvents(){
+ const q=$("eventSearch").value.trim().toLowerCase(),f=$("eventFilter").value;
+ const rows=events.filter(x=>(!f||x.action===f)&&(!q||[x.umbrella_id,x.student_id,x.actor,x.reason].some(v=>String(v||"").toLowerCase().includes(q))));
+ $("eventRows").innerHTML=rows.map(e=>'<tr><td>'+esc(new Date(e.created_at).toLocaleString("ko-KR"))+'</td><td><strong>'+esc(e.umbrella_id)+'</strong></td><td>'+esc(A[e.action]||e.action)+'</td><td>'+esc(e.student_id||"—")+'</td><td>'+esc(e.actor)+'</td><td>'+esc(e.reason||"—")+'</td></tr>').join("")||empty(6,"조건에 맞는 기록이 없습니다.");
+}
+async function refresh(){
+ const [i,e]=await Promise.all([api("/api/admin/inventory"),api("/api/admin/events")]);
+ inventory=i;events=e;renderStats();renderInventory();renderEvents();
+}
+async function authed(){
+ try{const r=await api("/api/admin/me");csrf=r.csrf;currentUser=r.username;show(true);await refresh();}
+ catch(err){if(err.message.includes("401")||err.message.includes("로그인"))show(false);else{show(false);$("loginMsg").textContent="관리자 데이터 조회 실패: "+err.message;$("loginMsg").classList.remove("hide");}}
+}
+$("loginForm").onsubmit=async ev=>{
+ ev.preventDefault();const btn=$("loginForm").querySelector("button");btn.disabled=true;
+ try{const d=await api("/api/admin/login",{method:"POST",body:{username:$("username").value,password:$("password").value}});csrf=d.csrf;currentUser=d.username;$("password").value="";$("loginMsg").classList.add("hide");show(true);await refresh();}
+ catch(err){$("loginMsg").textContent=err.message;$("loginMsg").classList.remove("hide");}
+ finally{btn.disabled=false;}
+};
+$("logout").onclick=async()=>{
+ try{await api("/api/admin/logout",{method:"POST",auth:true});}catch(e){console.warn(e);}
+ csrf="";inventory=[];events=[];show(false);
+};
+$("refresh").onclick=async()=>{try{await refresh();}catch(e){alert("새로고침 실패: "+e.message);}};
+$("search").oninput=renderInventory;$("filter").onchange=renderInventory;
+$("eventSearch").oninput=renderEvents;$("eventFilter").onchange=renderEvents;
+$("register").onclick=async()=>{
+ if(busy||!confirm("새 우산을 등록하시겠습니까?\n발급된 ID는 삭제하거나 재사용할 수 없습니다."))return;
+ busy=true;try{const r=await api("/api/admin/umbrellas",{method:"POST",auth:true});await refresh();$("adminId").value=r.id;message(r.id+" 등록 완료!");$("manageCard").scrollIntoView({behavior:"smooth",block:"center"});}
+ catch(e){message(e.message,true);}finally{busy=false;}
+};
+$("change").onclick=async()=>{
+ if(busy)return;
+ const id=$("adminId").value,state=$("state").value,reason=$("reason").value;
+ if(!id)return message("우산을 먼저 선택하세요.",true);
+ if(!confirm(id+"을(를) '"+N[state]+"' 상태로 변경하시겠습니까?"+(state==="DISPOSED"?"\n폐기 상태는 복구할 수 없습니다.":"")))return;
+ busy=true;
+ try{await api("/api/admin/umbrellas/"+encodeURIComponent(id),{method:"PATCH",auth:true,body:{status:state,reason}});$("reason").value="";await refresh();$("adminId").value=id;message(id+" 상태 변경 완료");}
+ catch(e){message(e.message,true);}finally{busy=false;}
+};
+async function exportJson(){
+ try{const r=await fetch("/api/admin/export",{credentials:"same-origin",cache:"no-store"});if(!r.ok)throw Error("백업 다운로드 실패 ("+r.status+")");
+ const blob=await r.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="keisung-umbrella-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+ catch(e){alert(e.message);}
+}
+$("download").onclick=exportJson;$("settingsExport").onclick=exportJson;
+authed();
 </script></body></html>
