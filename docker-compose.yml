@@ -1,0 +1,24 @@
+services:
+  umbrella:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DEPLOYMENT_MODE: production
+      SECURE_COOKIES: "true"
+      DATA_DIR: /app/data
+    # HTTPS is required: serve through a school-managed reverse proxy.
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - umbrella_data:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+volumes:
+  umbrella_data:
