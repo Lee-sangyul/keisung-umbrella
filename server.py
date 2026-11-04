@@ -32,8 +32,57 @@ DB_PATH = DATA_DIR / "umbrellas.db"
 COOKIE = "umbrella_admin"
 APP_ORIGIN = os.getenv("APP_ORIGIN", "").rstrip("/")
 SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
+DEPLOYMENT_MODE = os.getenv("DEPLOYMENT_MODE", "development").strip().lower()
+if DEPLOYMENT_MODE not in {"development", "production"}:
+    raise RuntimeError("DEPLOYMENT_MODE must be development or production.")
+ALLOW_STUDENT_SELF_ENROLLMENT = (DEPLOYMENT_MODE != "production"
+                                 and os.getenv("ALLOW_STUDENT_SELF_ENROLLMENT", "true").lower() == "true")
+
+
+def validate_production_settings(mode: str, origin: str, secure: bool) -> None:
+    if mode != "production":
+        return
+    parsed = urlsplit(origin)
+    if (parsed.scheme != "https" or not parsed.hostname or parsed.username
+            or parsed.password or parsed.path not in {"", "/"} or parsed.query
+            or parsed.fragment):
+        raise RuntimeError("Production requires APP_ORIGIN to be one exact HTTPS origin.")
+    if not secure:
+        raise RuntimeError("Production requires SECURE_COOKIES=true.")
+
+
+validate_production_settings(DEPLOYMENT_MODE, APP_ORIGIN, SECURE_COOKIES)
 app = FastAPI(title="Keisung Umbrella API", docs_url=None, redoc_url=None)
 app.mount("/assets", StaticFiles(directory=ROOT / "assets"), name="assets")
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=()"
+    if request.url.path.startswith("/api/"):
+        response.headers["Cache-Control"] = "no-store"
+    if DEPLOYMENT_MODE == "production":
+        response.headers["Strict-Transport-Security"] = "max-age=31536000"
+    return response
+
+
+@app.get("/healthz", include_in_schema=False)
+def healthz():
+    try:
+        with connect() as c:
+            c.execute("SELECT 1 FROM umbrellas LIMIT 1").fetchone()
+    except sqlite3.Error:
+        raise HTTPException(503, "Database is unavailable.")
+    return {"ok": True}
+
+
+@app.get("/api/config", include_in_schema=False)
+def public_config():
+    return {"self_enrollment": ALLOW_STUDENT_SELF_ENROLLMENT}
 STATES = {"AVAILABLE", "BORROWED", "LOST", "DAMAGED", "DISPOSED"}
 SEOUL = ZoneInfo("Asia/Seoul")
 STUDENT_RE = re.compile(r"^[1-6]-[1-4]-(?:[1-9]|[12][0-9]|3[0-6])$")
@@ -103,6 +152,12 @@ def init_db():
             username TEXT NOT NULL REFERENCES admins(username),
             csrf TEXT NOT NULL,
             expires_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS admin_login_limits (
+            key TEXT PRIMARY KEY,
+            failures INTEGER NOT NULL DEFAULT 0,
+            window_start INTEGER NOT NULL,
+            locked_until INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS student_pins (
             student_id TEXT PRIMARY KEY,
@@ -289,7 +344,8 @@ def verify_origin(request: Request):
 
     requested_host = request.headers.get("host", "").lower()
     trusted_origins = set()
-    if requested_host:
+    # Do not trust arbitrary Host headers as Origin authorization in production.
+    if DEPLOYMENT_MODE != "production" and requested_host:
         trusted_origins.add(f"{parsed.scheme}://{requested_host}")
     if APP_ORIGIN:
         trusted_origins.add(APP_ORIGIN.lower())
@@ -688,6 +744,8 @@ def student_pin_status(data: StudentPinStatusRequest, request: Request):
 def enroll_student_pin(data: StudentPinEnrollRequest, request: Request):
     """First-time student creates a PIN. Existing PINs cannot be overwritten."""
     verify_origin(request)
+    if not ALLOW_STUDENT_SELF_ENROLLMENT:
+        raise HTTPException(403, "운영 환경에서는 선생님이 신원을 확인한 후 PIN을 발급합니다.")
     student = validate_student(f"{data.grade}-{data.classroom}-{data.number}")
     if data.pin != data.pin_confirm:
         raise HTTPException(422, "PIN 확인 입력이 일치하지 않습니다.")
@@ -1101,22 +1159,59 @@ def return_umbrella(data: StudentRequest):
     return {"ok": True, "id": data.umbrella_id, "status": "AVAILABLE"}
 
 
+def login_rate_keys(request: Request, username: str) -> tuple[str, str]:
+    # User-supplied X-Forwarded-For is never trusted directly.
+    ip = request.client.host if request.client else "unknown"
+    return ("user:" + hashlib.sha256(username.casefold().encode("utf-8")).hexdigest(),
+            "ip:" + hashlib.sha256(ip.encode("utf-8")).hexdigest())
+
+
+def record_login_failure(c, keys: tuple[str, str], current: int) -> None:
+    # Per username: 5 failures / 15 min. Per source IP: 30 / 15 min.
+    for key, limit in zip(keys, (5, 30)):
+        row = c.execute("SELECT failures,window_start FROM admin_login_limits WHERE key=?",
+                        (key,)).fetchone()
+        in_window = row is not None and current - row["window_start"] < 900
+        failures = (row["failures"] if in_window else 0) + 1
+        window_start = row["window_start"] if in_window else current
+        locked_until = current + 900 if failures >= limit else 0
+        c.execute("""INSERT INTO admin_login_limits(key,failures,window_start,locked_until)
+                     VALUES(?,?,?,?)
+                     ON CONFLICT(key) DO UPDATE SET
+                     failures=excluded.failures,window_start=excluded.window_start,
+                     locked_until=excluded.locked_until""",
+                  (key, failures, window_start, locked_until))
+
+
 @app.post("/api/admin/login")
 def login(data: LoginRequest, request: Request, response: Response):
     verify_origin(request)
-    with connect() as c:
-        row = c.execute("SELECT * FROM admins WHERE username=?", (data.username,)).fetchone()
-    # Dummy hash to reduce username timing leaks.
-    salt = row["salt"] if row else b"0" * 16
-    digest = password_hash(data.password, salt)
-    if not row or not hmac.compare_digest(digest, row["pw_hash"]):
-        raise HTTPException(401, "계정 또는 비밀번호가 올바르지 않습니다.")
+    current = int(time.time())
+    keys = login_rate_keys(request, data.username)
     raw = secrets.token_urlsafe(32)
     csrf = secrets.token_urlsafe(32)
+    invalid = False
     with transaction() as c:
-        c.execute("DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),))
-        c.execute("INSERT INTO sessions(token_hash,username,csrf,expires_at) VALUES(?,?,?,?)",
-                  (hashlib.sha256(raw.encode()).hexdigest(), data.username, csrf, int(time.time()) + 8*3600))
+        c.execute("DELETE FROM admin_login_limits WHERE window_start < ? AND locked_until < ?",
+                  (current - 86400, current))
+        for key in keys:
+            record = c.execute("SELECT locked_until FROM admin_login_limits WHERE key=?",
+                               (key,)).fetchone()
+            if record and record["locked_until"] > current:
+                raise HTTPException(429, "로그인 시도가 너무 많습니다. 15분 뒤 다시 시도하세요.")
+        row = c.execute("SELECT * FROM admins WHERE username=?", (data.username,)).fetchone()
+        salt = row["salt"] if row else b"0" * 16
+        digest = password_hash(data.password, salt)
+        invalid = not row or not hmac.compare_digest(digest, row["pw_hash"])
+        if invalid:
+            record_login_failure(c, keys, current)
+        else:
+            c.execute("DELETE FROM admin_login_limits WHERE key IN (?,?)", keys)
+            c.execute("DELETE FROM sessions WHERE expires_at < ?", (current,))
+            c.execute("INSERT INTO sessions(token_hash,username,csrf,expires_at) VALUES(?,?,?,?)",
+                      (hashlib.sha256(raw.encode()).hexdigest(), data.username, csrf, current + 8*3600))
+    if invalid:
+        raise HTTPException(401, "계정 또는 비밀번호가 올바르지 않습니다.")
     response.set_cookie(COOKIE, raw, httponly=True,
                         secure=SECURE_COOKIES or urlsplit(request.headers.get("origin", "")).scheme == "https",
                         samesite="strict", max_age=8*3600, path="/")

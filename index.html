@@ -1151,7 +1151,7 @@ async function loadPolicyStudent(id){
   $("studentPenaltyBreakdown").textContent="기본 "+data.usage.limit+"회 + 추가 "+data.usage.extra+"회 − 이번 달 패널티 "+data.usage.penalty_deduction+"회 = 실제 한도 "+data.usage.effective_limit+"회";
   $("studentPenaltyPoints").textContent=data.penalty_points+"점";
   $("extraAllowance").value=data.usage.extra;
-  $("studentPinStatus").textContent=!data.has_pin?"PIN 미설정 · 키오스크에서 직접 설정 가능":(data.pin_locked?"PIN 등록됨 · 인증 시도 잠김 (15분 대기 또는 재발급)":"PIN 등록 완료");
+  $("studentPinStatus").textContent=!data.has_pin?"PIN 미설정 · 운영 시 관리자 발급 필요":(data.pin_locked?"PIN 등록됨 · 인증 시도 잠김 (15분 대기 또는 재발급)":"PIN 등록 완료");
   $("studentPinOutput").classList.add("hide");
   $("studentPinOutput").textContent="";
   $("studentPinVerified").checked=false;
