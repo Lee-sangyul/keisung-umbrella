@@ -760,10 +760,10 @@ def list_active_rentals(request: Request):
                WHERE u.status='BORROWED' AND t.returned_at IS NULL
                ORDER BY t.due_at ASC,u.id ASC"""
         ).fetchall()
-    rentals=[{"umbrella_id":uid(r["umbrella_id"]),"student_id":r["borrower"],
-              "rental_id":r["rental_id"],"borrowed_at":r["borrowed_at"],
-              "due_at":r["due_at"],"overdue":rental_is_overdue(r["due_at"])}
-             for r in rows]
+        rentals=[{"umbrella_id":uid(r["umbrella_id"]),"student_id":r["borrower"],
+                  "rental_id":r["rental_id"],"borrowed_at":r["borrowed_at"],
+                  "due_at":r["due_at"],"overdue":rental_is_overdue(r["due_at"])}
+                 for r in rows]
     return {"total":len(rentals),"overdue_count":sum(r["overdue"] for r in rentals),
             "rentals":rentals}
 
@@ -1112,11 +1112,13 @@ def change_state(umbrella_id: str, data: StatusRequest, request: Request):
         if target == "AVAILABLE" and old not in {"LOST", "DAMAGED"}:
             raise HTTPException(409, "분실 또는 파손 상태만 복구할 수 있습니다.")
         action = "RESTORE" if target == "AVAILABLE" else target
-        log(c, u["id"], action, u["borrower"], u["rental_id"], actor, data.reason)
+        log(c, u["id"], action, u["borrower"], u["rental_id"], actor, data.reason,
+            student_uid=u["borrower_uid"])
         if u["rental_id"]:
             c.execute("UPDATE rental_terms SET returned_at=? WHERE rental_id=? AND returned_at IS NULL",
                       (now(),u["rental_id"]))
-        c.execute("UPDATE umbrellas SET status=?,borrower=NULL,rental_id=NULL WHERE id=?", (target, u["id"]))
+        c.execute("UPDATE umbrellas SET status=?,borrower=NULL,borrower_uid=NULL,rental_id=NULL WHERE id=?",
+                  (target, u["id"]))
     return {"ok": True, "id": umbrella_id, "status": target}
 
 
@@ -1344,13 +1346,16 @@ def admin_inventory(request: Request):
     require_admin(request)
     with connect() as c:
         rows = c.execute(
-            """SELECT u.id,u.status,u.borrower,u.rental_id,
+            """SELECT u.id,u.status,u.borrower,u.borrower_uid,u.rental_id,
                       COALESCE(loc.location,'미지정') AS location
                FROM umbrellas u LEFT JOIN umbrella_locations loc
                ON loc.umbrella_id=u.id ORDER BY u.id DESC"""
         ).fetchall()
-    return [{"id": uid(r["id"]), "status": r["status"], "borrower": r["borrower"],
-             "rental_id": r["rental_id"],"location":r["location"]} for r in rows]
+        result=[{"id": uid(r["id"]), "status": r["status"],
+                 "borrower":academic.display_for_uid(c,r["borrower_uid"]) or r["borrower"],
+                 "rental_id": r["rental_id"],"location":r["location"]}
+                for r in rows]
+    return result
 
 
 class QRLabelRequest(BaseModel):
@@ -1422,8 +1427,14 @@ def export(request: Request):
         ).fetchall()
         rental_terms=c.execute("SELECT * FROM rental_terms ORDER BY borrowed_at").fetchall()
         rental_extensions=c.execute("SELECT * FROM rental_extensions ORDER BY id").fetchall()
+        student_accounts=c.execute("SELECT * FROM student_accounts ORDER BY uid").fetchall()
+        student_rosters=c.execute("SELECT * FROM student_rosters ORDER BY school_year,student_id").fetchall()
+        academic_transitions=c.execute("SELECT * FROM academic_transitions ORDER BY id").fetchall()
+        academic_entries=c.execute("SELECT * FROM academic_transition_entries ORDER BY transition_id,student_uid").fetchall()
+        academic_assignment_log=c.execute("SELECT * FROM academic_assignment_log ORDER BY id").fetchall()
+        # Student PIN secrets and legacy raw PIN material are intentionally excluded.
     payload = {
-        "schema_version":"3.4",
+        "schema_version":"3.5",
         "exported_at":now(),
         "umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],
         "events":[dict(e) for e in events],
@@ -1436,7 +1447,12 @@ def export(request: Request):
         "rental_terms":[dict(r) for r in rental_terms],
         "rental_extensions":[dict(x) for x in rental_extensions],
         "staff_accounts":[dict(row) for row in staff_accounts],
-        "staff_account_events":[dict(row) for row in staff_account_events]
+        "staff_account_events":[dict(row) for row in staff_account_events],
+        "student_accounts":[dict(row) for row in student_accounts],
+        "student_rosters":[dict(row) for row in student_rosters],
+        "academic_transitions":[dict(row) for row in academic_transitions],
+        "academic_transition_entries":[dict(row) for row in academic_entries],
+        "academic_assignment_log":[dict(row) for row in academic_assignment_log]
     }
     return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="umbrella-backup.json"', "Cache-Control":"no-store"})
