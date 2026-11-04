@@ -361,10 +361,19 @@ def qr_labels(data: QRLabelRequest, request: Request):
     for number in identifiers:
         value = uid(number)
         output = io.BytesIO()
-        segno.make(value, error="m", micro=False).save(
-            output, kind="svg", scale=5, border=4, xmldecl=False
+        qr = segno.make(value, error="m", micro=False)
+        scale = 5
+        border = 4  # QR quiet zone: four modules on each edge.
+        qr.save(output, kind="svg", scale=scale, border=border, xmldecl=False)
+        svg = output.getvalue().decode("utf-8")
+        # Segno SVG uses explicit width/height but does not always include a
+        # viewBox. When CSS sizes such an SVG, its path can be visibly cropped.
+        # Explicit viewBox makes the entire matrix + quiet zone scale together.
+        width, height = qr.symbol_size(scale=scale, border=border)
+        svg = svg.replace(
+            "<svg ", f'<svg viewBox="0 0 {width} {height}" preserveAspectRatio="xMidYMid meet" ', 1
         )
-        labels.append({"id": value, "svg": output.getvalue().decode("utf-8")})
+        labels.append({"id": value, "svg": svg})
     return {"labels": labels}
 
 
