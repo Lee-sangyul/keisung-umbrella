@@ -70,6 +70,7 @@ unset ADMIN_USERNAME ADMIN_PASSWORD APP_ORIGIN SECURE_COOKIES DATA_DIR
 
 ```text
 server.py          # FastAPI, SQLite, 로그인, 이벤트 기록
+reset_db.py        # 테스트 DB 백업 후 초기화 명령
 kiosk.html         # 16:9 학생용 전체 화면
 index.html         # /admin 관리자 화면
 .env.example       # 복사하여 .env 생성
@@ -80,70 +81,32 @@ Dockerfile
 
 ## 데이터베이스(DB) 초기화 — 테스트 환경 전용
 
-> **주의: 기존 우산 목록, 대여·반납 기록, 분실·파손 상태, 월별 대여 이용 기록, 추가 허용 횟수, 패널티 이력, 관리자 세션 및 월별 제한 설정이 모두 새 상태로 돌아갑니다.**
+> **주의:** 초기화하면 우산 목록·대여 및 반납 기록·패널티·월별 정책·관리자 세션이 새 DB에서 초기화됩니다. ID도 `UMB-0001`부터 다시 발급되므로 **기존 QR 라벨을 붙인 운영 중 우산이 있다면 실행하지 마세요.**
 >
-> **학교에서 실제 사용 중인 DB에는 실행하지 마세요.** 특히 초기화 후 우산 ID가 다시 `UMB-0001`부터 발급되므로 **기존에 출력해 붙여 둔 QR 스티커가 새로운 우산을 가리킬 수 있습니다.** 실사용에서는 전체 초기화 대신 우산별 상태 변경·관리자 패널티 취소·월별 자동 갱신을 사용하세요.
+> **실제 운영 DB에는 사용 금지.** 초기화는 테스트 환경에서만 진행하세요.
 
-### 1. 서버 완전 종료
+### 실행 방법 (Codespaces / Linux / Windows)
 
-Codespaces에서 Uvicorn이 실행되는 터미널에 `Ctrl+C`를 눌러 종료하세요. **다른 터미널이나 프로세스에서 같은 DB에 접근하는 서버도 모두 종료해야 합니다.** SQLite WAL 파일이 사용 중이면 백업이나 이동 중 데이터가 손상될 수 있습니다.
-
-### 2. 원본 DB 보관 후 초기화
-
-프로젝트 루트( `server.py`가 있는 폴더)에서 아래 명령을 실행합니다. **`.env` 파일의 `DATA_DIR`을 그대로 사용**하며, 실제 DB를 삭제하는 대신 날짜별 백업 폴더로 이동합니다.
+1. **Uvicorn 서버와 DB에 접근하는 모든 프로그램을 완전히 종료**합니다.
+2. 프로젝트 폴더에서 아래 명령을 실행합니다.
 
 ```bash
-source .venv/bin/activate
-python - <<'PY'
-import os
-import shutil
-from datetime import datetime
-from pathlib import Path
-from dotenv import load_dotenv
-
-root = Path.cwd()
-if not (root / "server.py").is_file():
-    raise SystemExit("오류: server.py가 있는 프로젝트 루트에서 실행하세요.")
-load_dotenv(root / ".env", override=True)
-
-data_dir = Path(os.getenv("DATA_DIR", str(root / "data"))).resolve()
-db = data_dir / "umbrellas.db"
-if not db.is_file():
-    raise SystemExit(f"DB 파일을 찾지 못했습니다: {db}")
-
-print(f"초기화 대상: {db}")
-print("서버가 완전히 중지되었는지 확인하세요.")
-answer = input("테스트 DB를 백업하고 초기화하려면 RESET 입력: ")
-if answer != "RESET":
-    raise SystemExit("취소했습니다. 파일을 변경하지 않았습니다.")
-
-backup_dir = data_dir / "backups" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
-backup_dir.mkdir(parents=True, exist_ok=False)
-for suffix in ("", "-wal", "-shm"):
-    path = data_dir / ("umbrellas.db" + suffix)
-    if path.exists():
-        shutil.move(str(path), str(backup_dir / path.name))
-
-print(f"이전 DB 보관 완료: {backup_dir}")
-print("서버를 재시작하면 새 DB가 자동 생성됩니다.")
-PY
+python reset_db.py
 ```
 
-실행 중 파일 접근 오류가 뜨면 **서버를 종료했는지 먼저 확인**하고, 백업 폴더 안의 파일들을 임의로 삭제하지 마세요. 백업에는 학생 정보가 포함될 수 있으니 외부에 공개하거나 GitHub에 커밋하면 안 됩니다.
-
-### 3. 서버 재시작
+3. 표시되는 DB 경로를 확인하고, 정말 초기화하려면 **`RESET`** 을 입력합니다. 다른 입력은 취소됩니다.
+4. 기존 `umbrellas.db` 및 관련 SQLite `-wal`, `-shm` 파일은 `DATA_DIR/backups/<날짜-시간>/`에 **자동 백업**됩니다. 삭제하지 않습니다.
+5. 서버를 다시 실행합니다.
 
 ```bash
 uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-최초 시작 시 `server.py`의 `init_db()`가 테이블을 새로 만들고, `.env`의 관리자 계정과 기본 **월 10회** 정책을 설정합니다. `/admin`에 다시 로그인하여 우산 목록이 비었는지 확인하세요.
+서버 재시작 시 `init_db()`가 새 DB·관리자 계정·기본 월 10회 정책을 다시 생성합니다. `/admin`에 재로그인하여 확인하세요.
 
-### 4. 이전 상태로 되돌리고 싶다면
+**복구:** Uvicorn을 완전히 종료하고 새 DB를 다른 곳에 보관한 다음, 백업 폴더의 `umbrellas.db`와 해당 `-wal`·`-shm` 파일(있는 경우)을 **한 묶음으로** 원래 `DATA_DIR`에 돌려놓으세요. 백업 파일을 GitHub에 올리지 마세요.
 
-서버를 **완전히 종료한 상태에서만** 복구하세요. 새 DB를 별도로 보관하고, 위 백업 폴더에 있는 `umbrellas.db`와 같은 이름의 `-wal`, `-shm` 파일(있다면)을 **모두 함께** 원래 `DATA_DIR`로 되돌리면 됩니다. 새 DB와 백업 DB 파일을 섞지 마세요. 복구한 다음 서버를 재시작하세요.
-
-**참고:** 월별 대여 횟수는 매월 1일(한국 시간) 기준으로 자동 갱신됩니다. 월별 한도를 초기화하려고 DB 전체를 리셋할 필요는 없습니다.
+**참고:** 월별 대여 제한은 매월 1일(한국 시간) 자동으로 새달 기준 계산됩니다. 월별 횟수 초기화만을 위해 DB 전체를 리셋할 필요는 없습니다.
 
 ---
 
