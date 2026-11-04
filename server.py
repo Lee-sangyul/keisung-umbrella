@@ -343,13 +343,14 @@ def korean_month_window():
 
 
 def month_usage(c,student):
+    stable_id=academic.resolve_student(c,student)
     month,start,end=korean_month_window()
     count=c.execute(
-        "SELECT COUNT(*) FROM events WHERE action='BORROW' AND student_id=? AND created_at>=? AND created_at<?",
-        (student,start,end)
+        "SELECT COUNT(*) FROM events WHERE action='BORROW' AND student_uid=? AND created_at>=? AND created_at<?",
+        (stable_id,start,end)
     ).fetchone()[0]
     limit=c.execute("SELECT value FROM policies WHERE key='monthly_limit'").fetchone()[0]
-    row=c.execute("SELECT extra FROM student_allowances WHERE student_id=? AND month=?",(student,month)).fetchone()
+    row=c.execute("SELECT extra FROM student_allowances WHERE student_uid=? AND month=?",(stable_id,month)).fetchone()
     extra=row["extra"] if row else 0
     # A penalty deducts that many borrowing opportunities in its issue month.
     # Reversal restores the deduction, even when the correction is made later.
@@ -357,13 +358,13 @@ def month_usage(c,student):
     penalty=c.execute(
         """SELECT COALESCE(SUM(p.points),0)
            FROM penalty_actions p
-           WHERE p.student_id=? AND p.reverses_id IS NULL
+           WHERE p.student_uid=? AND p.reverses_id IS NULL
              AND p.created_at>=? AND p.created_at<?
              AND NOT EXISTS (
                SELECT 1 FROM penalty_actions reversal
                WHERE reversal.reverses_id=p.id
              )""",
-        (student,start,end)
+        (stable_id,start,end)
     ).fetchone()[0]
     deducted=max(0,penalty)
     effective_limit=max(0,limit+extra-deducted)
@@ -649,13 +650,14 @@ def issue_student_pin(data: StudentPinIssueRequest, request: Request):
     salt = secrets.token_bytes(16)
     digest = student_pin_hash(pin, salt)
     with transaction() as c:
+        stable_id=academic.resolve_student(c,student,create=True,timestamp=now(),actor=actor)
         c.execute(
-            """INSERT INTO student_pins(student_id,salt,pin_hash,failed_attempts,last_failed_at,
+            """INSERT INTO student_credentials(student_uid,salt,pin_hash,failed_attempts,last_failed_at,
                locked_until,updated_at,updated_by) VALUES(?,?,?,0,0,0,?,?)
-               ON CONFLICT(student_id) DO UPDATE SET salt=excluded.salt,pin_hash=excluded.pin_hash,
+               ON CONFLICT(student_uid) DO UPDATE SET salt=excluded.salt,pin_hash=excluded.pin_hash,
                failed_attempts=0,last_failed_at=0,locked_until=0,
                updated_at=excluded.updated_at,updated_by=excluded.updated_by""",
-            (student, salt, digest, now(), actor)
+            (stable_id, salt, digest, now(), actor)
         )
     return Response(content=json.dumps({"student_id":student,"pin":pin},ensure_ascii=False),
                     media_type="application/json",
@@ -669,9 +671,10 @@ def student_pin_status(data: StudentPinStatusRequest, request: Request):
     verify_origin(request)
     student = validate_student(f"{data.grade}-{data.classroom}-{data.number}")
     with connect() as c:
-        registered = c.execute(
-            "SELECT 1 FROM student_pins WHERE student_id=?", (student,)
-        ).fetchone() is not None
+        stable_id=academic.resolve_student(c,student)
+        registered=bool(stable_id and c.execute(
+            "SELECT 1 FROM student_credentials WHERE student_uid=?", (stable_id,)
+        ).fetchone())
     return Response(
         json.dumps({"has_pin": registered}),
         media_type="application/json",
@@ -690,13 +693,14 @@ def enroll_student_pin(data: StudentPinEnrollRequest, request: Request):
         raise HTTPException(422, "너무 쉬운 PIN입니다. 다른 숫자 6자리로 설정해 주세요.")
     salt = secrets.token_bytes(16)
     with transaction() as c:
-        # No UPSERT: never overwrite existing credentials, even during concurrent requests.
+        # Race-safe registration bound to an immutable student UID, not class number.
+        stable_id=academic.resolve_student(c,student,create=True,timestamp=now())
         cur = c.execute(
-            """INSERT OR IGNORE INTO student_pins(
-                 student_id,salt,pin_hash,failed_attempts,last_failed_at,
+            """INSERT OR IGNORE INTO student_credentials(
+                 student_uid,salt,pin_hash,failed_attempts,last_failed_at,
                  locked_until,updated_at,updated_by)
                VALUES(?,?,?,0,0,0,?,?)""",
-            (student, salt, student_pin_hash(data.pin, salt), now(), "self-enrollment")
+            (stable_id, salt, student_pin_hash(data.pin, salt), now(), "self-enrollment")
         )
         created = cur.rowcount == 1
     if not created:
