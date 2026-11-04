@@ -24,20 +24,15 @@
 
 ```bash
 python -m venv .venv
+
 # Windows
 .venv\\Scripts\\activate
-# macOS/Linux: source .venv/bin/activate
+# macOS/Linux
+source .venv/bin/activate
+
 pip install -r requirements.txt
 
-# Linux/macOS
-export ADMIN_USERNAME=admin
-export ADMIN_PASSWORD='여기에_충분히_긴_임의의_관리자_비밀번호'
-export APP_ORIGIN=http://127.0.0.1:8000
-
-# Windows PowerShell
-# $env:ADMIN_USERNAME="admin"
-# $env:ADMIN_PASSWORD="여기에_충분히_긴_임의의_관리자_비밀번호"
-# $env:APP_ORIGIN="http://127.0.0.1:8000"
+# .env.example 파일의 이름을 .env 로 변경한 뒤 알맞은 값을 넣은 후 저장
 
 uvicorn server:app --host 127.0.0.1 --port 8000
 ```
