@@ -50,6 +50,7 @@
 .nav .nav-print-link{display:flex;align-items:center;gap:12px;color:#686b7b;text-decoration:none;min-height:49px;padding:12px 15px;border-radius:12px;font-size:15px;font-weight:800}
 .nav .nav-print-link:hover{background:#fff0ea;color:#ef5d37}
 
+.policy-breakdown{background:#fff1e9;border:1px solid #ffd7c5;border-radius:12px;padding:13px 16px;color:#a4482d;font-size:14px;font-weight:800;line-height:1.6;margin:0 0 20px}
 .policy-row,.allowance-row{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .policy-row .field,.allowance-row .field{width:min(300px,100%)}
 .policy-row .btn,.allowance-row .btn{min-height:45px}
@@ -126,7 +127,7 @@
    <div class="field"><label for="monthlyLimit">학생당 월 최대 대여 횟수</label><input class="input" id="monthlyLimit" type="number" min="1" max="100" value="10"></div>
    <button type="button" class="btn primary" id="savePolicy">월별 제한 저장</button>
   </div>
-  <p class="helper">기본 10회 · 정상 대여 성공 1건당 1회 계산 · 반납 시 복원되지 않습니다. 분실·파손 패널티 점수만으로 자동 대여 정지는 하지 않습니다.</p>
+  <p class="helper">기본 10회 · 대여 성공 1건당 1회 계산 · 반납 시 횟수 복원 없음 · 이번 달 확정 패널티 1점당 대여 가능 횟수 1회 차감. 차감된 패널티가 실제 한도를 0회로 만들면 추가 대여가 차단됩니다. 관리자가 취소하거나 추가 횟수를 승인할 수 있습니다.</p>
   <div class="msg hide" id="policyMessage" role="status"></div>
  </section>
  <section class="panel">
@@ -144,6 +145,7 @@
     <div class="student-policy-card"><span>이번 달 남은 횟수</span><strong id="studentRemaining">-</strong></div>
     <div class="student-policy-card"><span>누적 패널티</span><strong id="studentPenaltyPoints">-</strong></div>
    </div>
+   <p id="studentPenaltyBreakdown" class="policy-breakdown" aria-live="polite"></p>
    <div class="allowance-row">
     <div class="field"><label for="extraAllowance">이번 달 추가 대여 허용 횟수</label><input class="input" id="extraAllowance" type="number" min="0" max="100" value="0"></div>
     <button class="btn" type="button" id="saveAllowance">추가 횟수 저장</button>
@@ -158,7 +160,7 @@
     </div>
     <label class="confirm-penalty"><input type="checkbox" id="penaltyConfirmed"> 담당 교사가 사실관계 및 학생 소명을 확인했습니다.</label>
     <div class="actions"><button type="button" class="btn danger" id="addPenalty">패널티 기록 저장</button></div>
-    <p class="helper">학생의 잘못으로 확정되지 않은 파손에는 자동으로 점수를 부여하지 마세요. 분실 우산이 발견되면 아래에서 취소할 수 있습니다.</p>
+    <p class="helper">패널티 1점은 부여한 달의 대여 가능 횟수 1회를 차감합니다. 다음 달에는 재차 차감하지 않으며, 취소하면 해당 달의 차감도 복구됩니다. 학생의 책임이 확인되지 않은 파손에는 점수를 부여하지 마세요.</p>
    </div>
    <h3>패널티 이력 (취소 포함)</h3><div class="tablewrap"><table><thead><tr><th>날짜</th><th>유형</th><th>우산</th><th>점수</th><th>관리자</th><th>사유</th><th>처리</th></tr></thead><tbody id="studentPenalties"></tbody></table></div>
   </div>
@@ -329,8 +331,9 @@ async function loadPolicyStudent(id){
   selectedPolicyStudent=id;policyRecord=data;
   $("studentPolicyDetail").classList.remove("hide");
   $("studentActiveUmbrella").textContent=data.active_umbrella||"없음";
-  $("studentMonthUsed").textContent=data.usage.used+" / "+(data.usage.limit+data.usage.extra)+"회";
+  $("studentMonthUsed").textContent=data.usage.used+" / "+data.usage.effective_limit+"회";
   $("studentRemaining").textContent=data.usage.remaining+"회";
+  $("studentPenaltyBreakdown").textContent="기본 "+data.usage.limit+"회 + 추가 "+data.usage.extra+"회 − 이번 달 패널티 "+data.usage.penalty_deduction+"회 = 실제 한도 "+data.usage.effective_limit+"회";
   $("studentPenaltyPoints").textContent=data.penalty_points+"점";
   $("extraAllowance").value=data.usage.extra;
   const undone=new Set(data.penalties.filter(x=>x.reverses_id!==null).map(x=>x.reverses_id));
