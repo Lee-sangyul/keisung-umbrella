@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#ff6541"><title>계성 우산 · 관리자</title><link rel="icon" href="/assets/keisung-icon-64.png">
+<meta name="theme-color" content="#f5b7cf"><title>계성 우산 · 치이카와 감성 에디션 관리자</title><link rel="icon" href="/assets/keisung-icon-64.png">
 <style>
 :root{font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;color:#252735;background:#f7f8fb;font-synthesis:none}
 *{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{outline:3px solid #ff7c5b;outline-offset:2px}
@@ -102,9 +102,9 @@
 .academic-preview{background:#fffaf8;border:1px solid #efcfbf;border-radius:12px;padding:18px;margin:16px 0}
 .academic-preview h3{margin:0 0 10px;font-size:18px}
 #academicPreviewStats{font-weight:800}
-</style></head><body>
+</style><link rel="stylesheet" href="/assets/chiikawa-theme.css"></head><body class="chiikawa-edition admin-edition">
 <div id="loginScreen" class="login-wrap">
-  <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
+  <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산 <span class="admin-edition-label">✿ edition</span></a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
   <form id="loginForm"><div class="field"><label for="username">관리자 아이디</label><input class="input" id="username" required autocomplete="username"></div><div class="field"><label for="password">비밀번호</label><input class="input" type="password" id="password" required autocomplete="current-password"></div><button class="btn primary" type="submit">관리자 로그인</button></form>
   <div id="loginMsg" class="msg error hide" role="alert"></div>
   <p class="fixednote">학교 승인 전 테스트용 서비스입니다. 로그인 정보는 공유하지 마세요.</p>
@@ -128,7 +128,7 @@
     <div class="side-bottom"><span>학교 공용 우산 관리 시스템</span><a href="/">↗ 통합 키오스크</a></div>
   </aside>
   <main class="main">
-    <div class="topbar"><div><p class="eyebrow">SCHOOL MANAGEMENT</p><h1 class="title" id="pageTitle">대시보드</h1><p class="subtitle" id="pageSubtitle">학교 우산 현황을 한눈에 확인하세요.</p></div>
+    <div class="topbar"><div><p class="eyebrow">✿ CUTE UMBRELLA MANAGEMENT</p><h1 class="title" id="pageTitle">대시보드</h1><p class="subtitle" id="pageSubtitle">학교 우산 현황을 한눈에 확인하세요.</p></div>
     <div class="toolbar"><span class="session" id="who">관리자</span><button class="btn" id="refresh" type="button">↻ 새로고침</button><button class="btn" id="logout" type="button">로그아웃</button></div></div>
     <div class="notice">학생의 학년·반·번호는 개인정보에 해당할 수 있습니다. 운영 전 학교 승인 및 학생 인증, 개인정보 보존 정책을 확인하세요.</div>
     <div id="dashboard" class="tab active">

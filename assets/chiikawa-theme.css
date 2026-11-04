@@ -1,0 +1,148 @@
+/* Chiikawa-inspired pastel edition — original CSS cloud, flower and star
+   decorations only. No official images, fonts, logos, or remote assets. */
+:root {
+ --cute-ink:#514453;--cute-pink:#ffdae8;--cute-blue:#e7f5ff;
+ --cute-mint:#e8f7f1;--cute-yellow:#fff5d9;--cute-cream:#fffaf5;
+ --cute-rose:#c4557d;--cute-border:#edcfdb;
+ --cute-shadow:0 12px 36px rgb(122 72 104 / 11%);
+}
+body.chiikawa-edition {
+ color:var(--cute-ink);
+ background:radial-gradient(circle at 7% 11%,#ffe5f1 0,transparent 25rem),
+   radial-gradient(circle at 94% 22%,#e4f4ff 0,transparent 26rem),
+   radial-gradient(circle at 83% 91%,#fff1da 0,transparent 23rem),var(--cute-cream);
+}
+.chiikawa-edition button:focus-visible,
+.chiikawa-edition a:focus-visible,
+.chiikawa-edition input:focus-visible,
+.chiikawa-edition select:focus-visible {outline:4px solid #8753b0;outline-offset:3px}
+.chiikawa-edition .edition-tag,
+.chiikawa-edition .admin-edition-label,
+.chiikawa-edition .print-edition-tag {
+ display:inline-flex;align-items:center;white-space:nowrap;
+ padding:6px 12px;color:#9f3d63;background:#fff0f6;
+ border:2px solid #f0bfd3;border-radius:999px;
+ box-shadow:0 3px 0 #f6dae6;font-size:12px;font-weight:850;letter-spacing:0;
+}
+/* Large touch targets, original icons and logical workflow remain unchanged. */
+.kiosk-edition .shell{background:transparent}
+.kiosk-edition .header,.kiosk-edition .bottom {
+ background:rgb(255 255 255 / 95%);border-color:#f2dce8;
+ box-shadow:0 5px 26px rgb(160 88 126 / 6%);
+}
+.kiosk-edition .header{border-bottom:2px solid #f4d8e4}
+.kiosk-edition .brand{color:var(--cute-ink);letter-spacing:-.045em}
+.kiosk-edition .mark{background:#fff2f6;border:2px solid #ecc4d6;border-radius:23px;box-shadow:0 5px 0 #f4dfe8;overflow:hidden}
+.kiosk-edition .mark img{width:80%;height:80%;object-fit:contain}
+.kiosk-edition .stock{background:var(--cute-mint);border:1.5px solid #b9e5d2;color:#23684b}
+.kiosk-edition .dream-charm {
+ display:flex;gap:clamp(10px,1.7vw,23px);align-items:center;justify-content:center;
+ margin-bottom:clamp(7px,1.5vh,18px);
+}
+.kiosk-edition .dream-charm span {
+ display:grid;place-items:center;width:clamp(43px,4.4vw,69px);
+ height:clamp(43px,4.4vw,69px);font-size:clamp(24px,2.7vw,42px);
+ border:2px solid #e9ccdc;border-radius:44% 53% 47% 51%;
+ background:var(--cute-blue);color:#77a4c6;
+ box-shadow:0 5px 0 #eddee8;
+}
+.kiosk-edition .dream-charm span:nth-child(2){background:var(--cute-pink);color:#c75785;transform:rotate(-8deg) translateY(-5px)}
+.kiosk-edition .dream-charm span:nth-child(3){background:var(--cute-yellow);color:#c79443;transform:rotate(9deg)}
+.kiosk-edition .eyebrow{color:#a63d69;letter-spacing:.07em}
+.kiosk-edition h1{color:#514356;text-shadow:0 3px 0 #fff}
+.kiosk-edition .sub,.kiosk-edition .step-sub{color:#695d6b}
+.kiosk-edition .edition-whisper {
+ margin:12px 0 0;padding:7px 17px;font-size:clamp(12px,1.03vw,17px);
+ background:#fff;border:1.5px dashed #e7bacf;border-radius:999px;
+ color:#965b7a;font-weight:780;
+}
+.kiosk-edition .choice {
+ border-radius:clamp(27px,3vw,48px);
+ box-shadow:0 9px 0 #edd4e0,var(--cute-shadow);
+ transition:transform 150ms ease,box-shadow 150ms ease;
+}
+.kiosk-edition .choice.borrow {
+ background:linear-gradient(145deg,#ffe5ee,#fac8dc);color:#633b55;border:3px solid #efb3cd;
+}
+.kiosk-edition .choice.return {
+ background:linear-gradient(145deg,#e9f7ff,#cee9fa);color:#365871;border:3px solid #b7dcec;
+}
+.kiosk-edition .choice .symbol {
+ display:grid;place-items:center;background:rgb(255 255 255 / 65%);
+ border:2px solid #fff;border-radius:43% 54% 45% 52%;
+ width:clamp(92px,10vw,150px);height:clamp(92px,10vw,150px);
+}
+.kiosk-edition .choice small{color:inherit;opacity:.85}
+.kiosk-edition .progress span{background:#f0dfe8}
+.kiosk-edition .progress span.current{background:linear-gradient(90deg,#df92b6,#8bc2d9)}
+.kiosk-edition .seg button,.kiosk-edition .tile {
+ border-color:#e8cbdc;border-radius:20px;background:white;color:#544454;
+ box-shadow:0 3px 0 #eadbe3;
+}
+.kiosk-edition .seg button.selected,.kiosk-edition .tile.selected {
+ background:#ffd3e5;color:#59374d;border-color:#dc82a9;box-shadow:0 4px 0 #e7aac5;
+}
+.kiosk-edition .scanbox,.kiosk-edition .manualbox,
+.kiosk-edition .review-card,.kiosk-edition .staff-id-card,
+.kiosk-edition .pin-setup-card {
+ background:#fff;border:2px solid #eecfdf;
+ border-radius:30px;box-shadow:var(--cute-shadow);
+}
+.kiosk-edition .scanbox{background:#fff0f6}
+.kiosk-edition .manualbox{background:#f0f9ff;border-color:#cde5f5}
+.kiosk-edition .scanbox button,.kiosk-edition .primary,.kiosk-edition .modal button {
+ background:#b84473;color:white;border:2px solid #9a3864;
+ border-radius:21px;box-shadow:0 5px 0 #92395f;
+}
+.kiosk-edition .primary:disabled {background:#ded5d9;border-color:#ded5d9;color:#655b62;box-shadow:none}
+.kiosk-edition .back{background:#f9eaf1;color:#564456;border:1.5px solid #eacdda;border-radius:21px}
+.kiosk-edition .pin-panel input,.kiosk-edition .pin-setup-fields input,
+.kiosk-edition .manualbox input,.kiosk-edition .staff-id-card input {
+ background:white;border:2px solid #dfb7cf;border-radius:17px;
+}
+.kiosk-edition .pin-keypad button{background:#fffafd;border:1.5px solid #e7c8d8;border-radius:14px}
+.kiosk-edition .pin-keypad button:active{background:#ffdae9}
+.kiosk-edition .modal{background:#fffafd;border:3px solid #ffdaea}
+.kiosk-edition .overlay{background:rgb(56 38 61 / 80%)}
+/* Administrator and QR printing configuration screens. */
+.admin-edition .sidebar{background:linear-gradient(#fff9fd,#f6fbff);border-color:#eed5e1}
+.admin-edition .logo{color:#61465b}
+.admin-edition .nav button,.admin-edition .nav-print-link{border-radius:16px}
+.admin-edition .nav button.active{background:#ffe0ee;color:#983b67;box-shadow:inset 4px 0 #d986aa}
+.admin-edition .panel,.admin-edition .stat,.admin-edition .login,
+.print-edition .card {
+ background:rgb(255 255 255 / 97%);border:1.5px solid #ead2df;
+ border-radius:24px;box-shadow:var(--cute-shadow);
+}
+.admin-edition .stat.highlight{background:linear-gradient(135deg,#cc7199,#a65088);border-color:#b65b86;color:white}
+.admin-edition .btn.primary,.print-edition .btn.primary {
+ background:#b64372;border-color:#a43668;color:white;border-radius:14px;box-shadow:0 3px 0 #93355c;
+}
+.admin-edition .eyebrow,.admin-edition .bubble,.print-edition .count{color:#ab3b69}
+.admin-edition .bubble{background:#ffe4ef}
+.admin-edition .student-lookup{background:#fff3f8;border-color:#f0c8da;border-radius:21px}
+.admin-edition .login-wrap {
+ background:radial-gradient(circle at 18% 20%,#f7d8e7,transparent 39%),
+ radial-gradient(circle at 85% 85%,#d9effc,transparent 38%),#fffaf7;
+}
+.admin-edition .login{border-radius:32px}
+.admin-edition .logo img,.print-edition .brand img{background:#fff1f6;border:1.5px solid #efcadd;box-shadow:0 3px 0 #f3dce9}
+.print-edition .brand{color:#654858}
+.print-edition .preview{background:#fff8fc;border-color:#e4bfd0}
+.print-edition .item:has(input:checked){background:#ffedf5;border-color:#e2a3c0}
+.print-edition input[type=checkbox]{accent-color:#b64372}
+.print-edition a{color:#943d6b}
+/* QR printing stays black-and-white and high contrast. */
+@media print{body.chiikawa-edition{background:white!important;color:#111!important}.print-edition .card{box-shadow:none}}
+@media(max-width:950px){.kiosk-edition .edition-tag{display:none}}
+@media(max-width:550px){
+ .kiosk-edition .dream-charm{gap:8px}
+ .kiosk-edition .dream-charm span{width:39px;height:39px;font-size:23px}
+ .kiosk-edition .choice .symbol{width:75px;height:75px}
+ .kiosk-edition .edition-whisper{padding:6px 9px;font-size:12px}
+ .admin-edition .admin-edition-label{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+ .chiikawa-edition *,.chiikawa-edition *::before,
+ .chiikawa-edition *::after{animation:none!important;transition:none!important}
+}

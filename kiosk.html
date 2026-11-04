@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#ff6541"><title>계성 우산 | 간편 대여</title><link rel="icon" type="image/png" href="/assets/keisung-icon-64.png">
+<meta name="theme-color" content="#f5b7cf"><title>계성 우산 | 치이카와 감성 에디션</title><link rel="icon" type="image/png" href="/assets/keisung-icon-64.png">
 <style>
 :root{font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#fff9f5;color:#26212a;font-synthesis:none}
 *{box-sizing:border-box}html,body{height:100%;margin:0}button,input{font:inherit}button{cursor:pointer;touch-action:manipulation}button:focus-visible,input:focus-visible{outline:4px solid #3148ff;outline-offset:3px}
@@ -142,18 +142,20 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 .staff-id-card input{width:100%;height:clamp(68px,8.5vh,95px);padding:0 23px;font-size:clamp(24px,2.4vw,37px);font-weight:850;letter-spacing:.07em;border:2px solid #ebdbd2;border-radius:18px;text-transform:uppercase}
 .staff-id-card p{font-size:clamp(14px,1.15vw,19px);color:#81757a;line-height:1.5;text-align:left}
 @media(max-width:700px){.role-choice .choice{min-height:210px}.staff-id-card{padding:18px}}
-</style></head>
-<body>
+</style><link rel="stylesheet" href="/assets/chiikawa-theme.css"></head>
+<body class="chiikawa-edition kiosk-edition">
 <div class="shell">
  <header class="header">
- <div class="brand"><div class="mark" aria-hidden="true"><img src="/assets/keisung-icon-64.png" alt="" width="64" height="64"></div><span>계성 우산</span></div>
+ <div class="brand"><div class="mark" aria-hidden="true"><img src="/assets/keisung-icon-64.png" alt="" width="64" height="64"></div><span>계성 우산</span><span class="edition-tag">✿ 치이카와 에디션</span></div>
  <div class="header-aside"><span class="stock" id="stock">대여 가능 확인 중</span></div>
  </header>
  <main>
   <section class="page active" id="welcome"><div class="center">
-    <p class="eyebrow">KEISUNG UMBRELLA</p>
+    <div class="dream-charm" aria-hidden="true"><span>☁</span><span>✿</span><span>★</span></div>
+    <p class="eyebrow">KEISUNG UMBRELLA · CUTE EDITION</p>
     <h1 id="welcomeTitle">우산이 필요하신가요?</h1>
     <p class="sub" id="welcomeHint">우산을 빌리거나 반납할 수 있어요.</p>
+    <p class="edition-whisper">작은 우산 하나에, 포근한 하루를 담아요 ☂</p>
     <div class="choice-grid role-choice hidden" id="roleChooser">
       <button class="choice borrow" type="button" id="chooseStudent"><span class="symbol" aria-hidden="true">🎒</span><strong>학생</strong><small>학년 · 반 · 번호와 학생 PIN</small></button>
       <button class="choice return" type="button" id="chooseStaff"><span class="symbol" aria-hidden="true">👩‍🏫</span><strong>교직원</strong><small>교직원 ID와 전용 PIN</small></button>
