@@ -47,6 +47,8 @@
 .lookup-result{margin-top:13px;border-radius:11px;padding:13px;background:#fff;color:#555a68;border:1px solid #e9e8ed;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .lookup-result strong{font-size:15px;color:#32343f}
 @media(max-width:700px){.student-fields{grid-template-columns:repeat(3,minmax(0,1fr))}.student-fields .btn{grid-column:1/-1}.student-lookup{padding:13px}}
+.nav .nav-print-link{display:flex;align-items:center;gap:12px;color:#686b7b;text-decoration:none;min-height:49px;padding:12px 15px;border-radius:12px;font-size:15px;font-weight:800}
+.nav .nav-print-link:hover{background:#fff0ea;color:#ef5d37}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -62,6 +64,7 @@
       <button type="button" data-tab="dashboard" class="active"><span>▦</span> 대시보드</button>
       <button type="button" data-tab="inventory"><span>▤</span> 우산 관리</button>
       <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
+      <a class="nav-print-link" href="/admin/print"><span>▦</span> QR 라벨 인쇄</a>
       <button type="button" data-tab="settings"><span>⚙</span> 관리 도구</button>
     </nav></div>
     <div class="side-bottom"><span>학교 공용 우산 관리 시스템</span><a href="/">↗ 학생용 키오스크 열기</a></div>
@@ -80,14 +83,14 @@
     </div>
     <div id="inventory" class="tab">
       <section class="panel">
-       <div class="head"><div><h2 class="section-title">우산 목록</h2><p class="subtext">우산은 삭제하지 않으며 고유 ID가 유지됩니다.</p></div><button class="btn primary" id="register">＋ 우산 등록</button></div>
+       <div class="head"><div><h2 class="section-title">우산 목록</h2><p class="subtext">우산은 삭제하지 않으며 고유 ID가 유지됩니다.</p></div><div class="actions" style="margin-top:0"><a href="/admin/print" class="btn">▦ QR 일괄 인쇄</a><button class="btn primary" id="register">＋ 우산 등록</button></div></div>
        <div class="searchline"><input class="input search" id="search" placeholder="우산 ID 또는 학생 (예: 6-4-16)" aria-label="우산 ID 또는 학년 반 번호로 검색"><div class="filters"><select id="filter" aria-label="상태 필터"><option value="">전체 상태</option><option value="AVAILABLE">대여 가능</option><option value="BORROWED">대여 중</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option></select></div></div>
        <div class="student-lookup" aria-label="학생별 대여 우산 조회">
  <div><strong>학생으로 대여 우산 찾기</strong><p class="helper">학년 · 반 · 번호로 현재 대여 중인 우산을 조회합니다. 관리자만 이용할 수 있습니다.</p></div>
  <div class="student-fields"><div class="field"><label for="studentGrade">학년</label><select id="studentGrade"></select></div><div class="field"><label for="studentClass">반</label><select id="studentClass"></select></div><div class="field"><label for="studentNumber">번호</label><select id="studentNumber"></select></div><button type="button" class="btn primary" id="findStudent">조회</button></div>
  <div id="studentResult" class="lookup-result hide" role="status"></div>
  </div>
- <div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>상태</th><th>대여 학생</th><th>관리</th></tr></thead><tbody id="inventoryRows"></tbody></table></div>
+ <div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>상태</th><th>대여 학생</th><th>관리 · 인쇄</th></tr></thead><tbody id="inventoryRows"></tbody></table></div>
       </section>
       <section class="panel" id="manageCard"><div class="head"><div><h2 class="section-title">상태 변경</h2><p class="subtext">분실·파손·폐기 처리 또는 복구</p></div></div>
         <div class="formgrid"><div class="field"><label for="adminId">우산 ID</label><select id="adminId"></select></div><div class="field"><label for="state">변경할 상태</label><select id="state"><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="AVAILABLE">대여 가능으로 복구</option></select></div><div class="field wide"><label for="reason">사유 (선택)</label><input class="input" id="reason" maxlength="160" placeholder="예: 1층 우산함에서 발견"></div></div>
@@ -100,7 +103,7 @@
        <div class="tablewrap"><table><thead><tr><th>처리 시간</th><th>우산 ID</th><th>이벤트</th><th>학생</th><th>담당자</th><th>사유</th></tr></thead><tbody id="eventRows"></tbody></table></div>
       </section>
     </div>
-    <div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/" target="_blank" rel="noopener">↗ 학생용 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
+    <div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/admin/print">▦ QR 인쇄 센터</a><a class="btn" href="/" target="_blank" rel="noopener">↗ 학생용 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
     <p class="fixednote">KEISUNG UMBRELLA · 관리자 접근 전용 · 서버 데이터 기준</p>
   </main>
 </div>
@@ -141,7 +144,7 @@ function renderInventory(){
  const search=$("search").value.trim().toUpperCase(),status=$("filter").value;
  const normalized=search.replace(/\s/g,"").replace(/학년|반|번/g,"-").replace(/-+/g,"-").replace(/-$/,"");
  const items=inventory.filter(x=>(!search||x.id.includes(search)||String(x.borrower||"").includes(normalized))&&(!status||x.status===status));
- $("inventoryRows").innerHTML=items.map(x=>'<tr><td><strong>'+esc(x.id)+'</strong></td><td>'+pill(x.status)+'</td><td>'+esc(x.borrower||"—")+'</td><td><button class="btn" data-id="'+esc(x.id)+'" '+(x.status==="DISPOSED"?"disabled":"")+'>관리</button></td></tr>').join("")||empty(4,"검색된 우산이 없습니다.");
+ $("inventoryRows").innerHTML=items.map(x=>'<tr><td><strong>'+esc(x.id)+'</strong></td><td>'+pill(x.status)+'</td><td>'+esc(x.borrower||"—")+'</td><td><button class="btn" data-id="'+esc(x.id)+'" '+(x.status==="DISPOSED"?"disabled":"")+'>관리</button> <a class="btn" href="/admin/print?umbrella='+encodeURIComponent(x.id)+'">QR 인쇄</a></td></tr>').join("")||empty(4,"검색된 우산이 없습니다.");
  for(const b of $("inventoryRows").querySelectorAll("[data-id]"))b.onclick=()=>{$("adminId").value=b.dataset.id;$("manageCard").scrollIntoView({behavior:"smooth",block:"center"});};
  const prev=$("adminId").value;
  $("adminId").innerHTML=inventory.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.id)+" · "+N[x.status]+"</option>").join("");
