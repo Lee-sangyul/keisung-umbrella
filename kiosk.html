@@ -270,7 +270,11 @@ function show(n){
    (mode==="borrow"?"우산을 빌릴 분의 유형을 선택해 주세요.":"우산을 반납할 분의 유형을 선택해 주세요."):
    "우산을 빌리거나 반납할 수 있어요.";
   $("back").textContent="대여·반납 다시 선택";
- }else $("back").textContent="이전 단계";
+ }else{
+  $("roleChooser").classList.add("hidden");
+  $("actionChooser").classList.add("hidden");
+  $("back").textContent="이전 단계";
+ }
  if(n===1){renderTiles();}
  if(n===6){$("next").textContent="우산 QR 확인 →";$("next").disabled=!validStaffId();}
  if(n===2){$("next").textContent="PIN 만들고 계속 →";$("next").disabled=!pinSetupReady();}
