@@ -1,5 +1,6 @@
 """Keisung Umbrella server MVP: FastAPI + SQLite, admin session login."""
 import hashlib
+import io
 import hmac
 import json
 import os
@@ -18,6 +19,7 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+import segno
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env", override=True)  # .env is authoritative for this single-instance MVP.
@@ -327,6 +329,38 @@ def admin_inventory(request: Request):
         rows = c.execute("SELECT id,status,borrower,rental_id FROM umbrellas ORDER BY id DESC").fetchall()
     return [{"id": uid(r["id"]), "status": r["status"], "borrower": r["borrower"],
              "rental_id": r["rental_id"]} for r in rows]
+
+
+class QRLabelRequest(BaseModel):
+    umbrella_ids: list[str] = Field(min_length=1, max_length=200)
+
+
+@app.post("/api/admin/qr-labels")
+def qr_labels(data: QRLabelRequest, request: Request):
+    """Only authenticated admins may generate verified umbrella QR labels.
+
+    QR payloads contain only the public umbrella ID, never student information.
+    """
+    require_admin(request, csrf=True)
+    identifiers = list(dict.fromkeys(parse_id(value) for value in data.umbrella_ids))
+    with connect() as c:
+        placeholders = ",".join("?" for _ in identifiers)
+        rows = c.execute(
+            f"SELECT id FROM umbrellas WHERE id IN ({placeholders})", identifiers
+        ).fetchall()
+    found = {row["id"] for row in rows}
+    if len(found) != len(identifiers):
+        raise HTTPException(404, "등록되지 않은 우산 ID가 포함되어 있습니다.")
+    labels = []
+    for number in identifiers:
+        value = uid(number)
+        output = io.BytesIO()
+        segno.make(value, error="m", micro=False).save(
+            output, kind="svg", scale=5, border=4, xmldecl=False
+        )
+        labels.append({"id": value, "svg": output.getvalue().decode("utf-8")})
+    return {"labels": labels}
+
 
 @app.get("/api/admin/events")
 def admin_events(request: Request):
