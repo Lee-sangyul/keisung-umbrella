@@ -1,131 +1,132 @@
 <!doctype html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#101e38">
-<title>계성 우산 · 대여 및 반납</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ff6541"><title>계성 우산 | 간편 대여</title>
 <style>
-:root{font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;color:#13213a;background:#eef3f9;font-synthesis:none}*{box-sizing:border-box}
-html,body{margin:0;width:100%;min-height:100%;overflow-x:hidden}button,input,select{font:inherit;touch-action:manipulation}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:4px solid #ffbf48;outline-offset:2px}
-.kiosk{min-height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;padding:clamp(12px,1.8vw,28px);gap:clamp(10px,1.3vw,20px);max-width:1920px;margin:auto}
-.top{display:flex;align-items:center;justify-content:space-between;gap:14px}
-.brand{display:flex;align-items:center;gap:14px}.logo{width:clamp(49px,4.5vw,70px);height:clamp(49px,4.5vw,70px);border-radius:19px;background:#133962;display:grid;place-items:center;font-size:clamp(25px,2.4vw,39px)}
-.brand h1{font-size:clamp(22px,2.5vw,37px);margin:0;letter-spacing:-.04em}.brand p{margin:3px 0 0;color:#64748b;font-weight:600;font-size:clamp(13px,1vw,17px)}
-.top-right{display:flex;align-items:center;gap:12px}.live{border-radius:100px;padding:12px 17px;background:#dff6e9;color:#16643d;font-weight:800;font-size:clamp(12px,1vw,17px)}
-.admin{color:#66758f;text-decoration:none;background:#fff;border:1px solid #d5e2f0;border-radius:13px;padding:12px 16px;font-weight:700}
-.layout{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,.94fr);gap:clamp(12px,1.5vw,24px);min-height:0}
-.panel{background:#fff;border:1px solid #dce5f0;border-radius:clamp(18px,2vw,30px);box-shadow:0 11px 36px #1c33510d;padding:clamp(18px,2.3vw,36px);min-width:0;min-height:0}
-.step{color:#245c9c;font-weight:900;font-size:clamp(14px,1.15vw,19px);letter-spacing:.02em;margin:0 0 7px}
-h2{font-size:clamp(26px,2.45vw,44px);line-height:1.18;margin:0 0 12px;letter-spacing:-.055em}
-.desc{font-size:clamp(14px,1.1vw,18px);color:#6a7b91;font-weight:600;line-height:1.5;margin:0}
-.left{display:flex;flex-direction:column}
-.scan-card{margin-top:clamp(17px,3vh,33px);flex:1;min-height:0;background:linear-gradient(155deg,#f1f7ff,#e4effc);border:2px dashed #a8c6ec;border-radius:23px;padding:clamp(14px,2vw,26px);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:clamp(9px,1.1vw,16px);text-align:center}
-.scan-icon{width:clamp(70px,8vw,145px);height:clamp(70px,8vw,145px);border:5px solid #1b73c5;border-radius:26px;display:grid;place-items:center;font-size:clamp(35px,4vw,72px);background:#fff}
-.scan-card strong{font-size:clamp(20px,1.7vw,29px);letter-spacing:-.03em}
-.scan-card p{font-size:clamp(13px,1.02vw,17px);color:#5c7393;margin:0}
-.scan-button{min-height:clamp(63px,7.3vh,97px);width:min(100%,440px);border:0;border-radius:19px;background:#146ac1;color:white;font-weight:900;font-size:clamp(20px,1.6vw,29px);box-shadow:0 7px 0 #0c4f99}
-.scan-button:active,.action:active{transform:translateY(3px);box-shadow:none}
-.manual{display:flex;gap:12px;align-items:center;width:100%;margin-top:clamp(14px,2vh,26px)}
-.manual label{white-space:nowrap;font-size:clamp(13px,1vw,17px);font-weight:800}
-.manual input{border:2px solid #cad7e6;border-radius:16px;padding:12px 17px;min-width:0;flex:1;min-height:clamp(60px,6.5vh,82px);font-size:clamp(21px,2vw,34px);font-weight:850;letter-spacing:.03em;text-transform:uppercase}
-.right{display:flex;flex-direction:column}
-.inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:clamp(9px,1vw,18px);margin:clamp(18px,4vh,42px) 0 clamp(12px,2vw,29px)}
-.control label{display:block;font-weight:900;font-size:clamp(15px,1.3vw,22px);margin-bottom:11px}
-.control select{appearance:none;width:100%;border:2px solid #c9d9ea;border-radius:18px;background:#f7faff;padding:clamp(12px,1.5vw,23px) 10px;text-align:center;font-size:clamp(24px,2.8vw,47px);font-weight:950;min-height:clamp(75px,11vh,137px)}
-.actions{display:grid;grid-template-columns:1fr 1fr;gap:clamp(10px,1vw,16px);margin-top:auto}
-.action{min-height:clamp(105px,19vh,200px);border:0;border-radius:24px;font-size:clamp(24px,2.25vw,43px);font-weight:950;display:flex;flex-direction:column;gap:7px;align-items:center;justify-content:center;transition:transform .1s}
-.action span{font-size:clamp(24px,2.4vw,45px)}.borrow{background:#1267be;color:#fff;box-shadow:0 7px 0 #0b4d90}.return{background:#dff8e8;color:#14663d;box-shadow:0 7px 0 #a8dbbb}
-.hint{margin-top:clamp(15px,2.5vh,25px);border-radius:15px;background:#f1f5fa;padding:clamp(12px,1.2vw,18px);color:#62738b;font-size:clamp(13px,.95vw,16px);font-weight:650;line-height:1.5}
-.footer{font-size:clamp(11px,.85vw,14px);font-weight:700;color:#6f829b;display:flex;justify-content:space-between;gap:10px;align-items:center}
-.overlay{position:fixed;inset:0;z-index:10;background:#0b1e35d9;display:grid;place-items:center;padding:18px}.hidden{display:none!important}
-.dialog{background:white;width:min(93vw,750px);border-radius:27px;padding:clamp(22px,3vw,40px);box-shadow:0 25px 90px #05101d70;text-align:center}
-.dialog h3{font-size:clamp(25px,2.8vw,40px);margin:3px 0 13px}.dialog p{font-size:clamp(17px,1.6vw,24px);line-height:1.6;color:#5d7087;margin:5px 0 22px;white-space:pre-wrap}
-.dialog video{width:100%;max-height:45vh;border-radius:16px;background:#10233d;object-fit:cover}
-.dialog-actions{display:flex;gap:13px;margin-top:23px}.dialog-actions button{border:0;border-radius:16px;min-height:70px;flex:1;font-weight:900;font-size:clamp(18px,1.65vw,25px);background:#e9eef5;color:#173047}.dialog-actions .primary{background:#146ac1;color:white}
-@media(min-aspect-ratio:16/9) and (min-width:1000px){.kiosk{height:100dvh}.scan-card{margin-top:16px}.inputs{margin-top:22px}}
-@media(max-width:920px){.layout{grid-template-columns:1fr}.kiosk{height:auto;min-height:100dvh}.scan-card{min-height:260px}.action{min-height:120px}.right{min-height:380px}}
-@media(max-width:550px){.kiosk{padding:10px}.panel{padding:18px}.top-right .live{display:none}.admin{font-size:12px;padding:10px}.brand p{font-size:12px}.manual{flex-direction:column;align-items:stretch}.manual input{width:100%}.inputs{gap:8px}.control select{font-size:26px;min-height:80px}.control label{font-size:15px}.action{font-size:23px}.footer{flex-wrap:wrap}}
+:root{font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:#fff9f5;color:#26212a;font-synthesis:none}
+*{box-sizing:border-box}html,body{height:100%;margin:0}button,input{font:inherit}button{cursor:pointer;touch-action:manipulation}button:focus-visible,input:focus-visible{outline:4px solid #3148ff;outline-offset:3px}
+.shell{width:100%;min-height:100dvh;display:grid;grid-template-rows:auto minmax(0,1fr) auto;overflow:hidden}
+.header{height:clamp(78px,10vh,118px);padding:0 clamp(22px,4.5vw,88px);display:flex;align-items:center;justify-content:space-between;background:white;border-bottom:1px solid #f2e5dd}
+.brand{display:flex;align-items:center;gap:15px;font-size:clamp(23px,2.1vw,36px);font-weight:950;letter-spacing:-.06em}
+.mark{width:clamp(50px,4vw,72px);height:clamp(50px,4vw,72px);border-radius:19px;background:#ff6541;display:grid;place-items:center;font-size:clamp(28px,2.5vw,46px);color:white}
+.header-aside{display:flex;align-items:center;gap:22px}.stock{background:#e9f8ee;color:#237349;padding:13px 21px;border-radius:999px;font-weight:850;font-size:clamp(14px,1.15vw,21px)}.admin{color:#797682;text-decoration:none;font-size:clamp(13px,1vw,18px);font-weight:700}
+main{display:flex;align-items:stretch;justify-content:center;min-height:0;padding:clamp(18px,2.7vh,34px) clamp(20px,4.5vw,86px)}
+.page{display:none;width:min(100%,1680px);height:100%;min-height:0}.page.active{display:flex;flex-direction:column}
+.progress{display:flex;align-items:center;gap:11px;margin-bottom:clamp(13px,2vh,28px)}.progress span{height:8px;flex:1;max-width:130px;border-radius:20px;background:#f0ded4}.progress span.current{background:#ff6541}
+.center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;text-align:center}
+.eyebrow{margin:0 0 13px;color:#ff6541;font-weight:900;font-size:clamp(16px,1.35vw,25px)}
+h1{font-size:clamp(38px,4.5vw,76px);line-height:1.15;letter-spacing:-.075em;margin:0 0 18px;font-weight:950}
+.sub{margin:0;color:#857a7c;font-size:clamp(18px,1.55vw,29px);font-weight:650;line-height:1.45}
+.choice-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:clamp(18px,2.5vw,45px);width:min(100%,1150px);margin:clamp(35px,6vh,84px) auto 0}
+.choice{border:3px solid transparent;border-radius:clamp(25px,2.3vw,43px);min-height:clamp(240px,34vh,400px);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:17px;box-shadow:0 13px 35px #a15b4020;transition:transform .12s}
+.choice:active,.tile:active,.primary:active{transform:scale(.98)}.choice .symbol{font-size:clamp(60px,7vw,120px);line-height:1}.choice strong{font-size:clamp(29px,2.7vw,49px);font-weight:950}.choice small{font-size:clamp(17px,1.28vw,23px);font-weight:650}
+.borrow{background:#ff6541;color:white}.return{background:white;border-color:#f1dfd6;color:#25212a}
+.step-title{font-size:clamp(31px,3.2vw,55px);font-weight:950;letter-spacing:-.06em;margin:0 0 10px;text-align:center}.step-sub{text-align:center;color:#7a737a;font-weight:650;font-size:clamp(16px,1.35vw,24px);margin:0 0 clamp(20px,3vh,40px)}
+.selection-wrap{flex:1;min-height:0;display:grid;grid-template-rows:auto 1fr;gap:clamp(14px,2vh,26px)}.seg{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+.seg button{border:2px solid #edddd5;background:#fff;border-radius:20px;min-height:clamp(57px,7vh,88px);min-width:clamp(130px,12vw,225px);font-size:clamp(19px,1.65vw,30px);font-weight:900;color:#756b71;padding:10px 23px}
+.seg button.selected{background:#ff6541;border-color:#ff6541;color:white}
+.tiles{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:clamp(7px,.8vw,14px);align-content:center;overflow:auto;padding:5px 3px 10px}
+.tile{min-height:clamp(65px,8vh,111px);border:2px solid #f0e0d8;border-radius:clamp(13px,1.3vw,22px);background:#fff;color:#29242a;font-weight:950;font-size:clamp(22px,2.2vw,40px)}
+.tile.selected{background:#ff6541;color:white;border-color:#ff6541;box-shadow:0 5px 0 #db4c31}
+.bottom{padding:clamp(13px,2vh,27px) clamp(20px,4.5vw,86px);background:white;border-top:1px solid #f2e5dd;display:flex;align-items:center;justify-content:space-between;gap:18px;min-height:clamp(92px,13vh,140px)}
+.back{min-width:clamp(140px,12vw,210px);height:clamp(62px,7.5vh,92px);background:#f4efed;border:0;border-radius:21px;font-weight:900;font-size:clamp(21px,1.65vw,30px);color:#5f5962}.primary{margin-left:auto;min-width:clamp(260px,27vw,510px);height:clamp(65px,8.5vh,107px);background:#ff6541;color:#fff;border:0;border-radius:22px;font-weight:950;font-size:clamp(23px,1.9vw,35px);box-shadow:0 5px 0 #d7482b}.primary:disabled{background:#ded4d1;box-shadow:none;cursor:not-allowed}.summary{font-weight:850;color:#514c54;font-size:clamp(15px,1.18vw,22px);line-height:1.4}
+.qr-area{width:min(100%,1250px);display:grid;grid-template-columns:1fr 1fr;gap:clamp(16px,2.5vw,44px);margin-top:clamp(26px,5vh,60px);text-align:left;align-items:stretch}
+.scanbox,.manualbox{border:2px solid #f0e1d8;background:white;border-radius:30px;padding:clamp(24px,3vw,46px);display:flex;flex-direction:column;justify-content:center;align-items:center;gap:17px;min-height:clamp(260px,35vh,440px)}
+.scanbox{background:#fff0e9;border-color:#f6cbb8}.qr-icon{font-size:clamp(65px,7vw,120px)}.scanbox strong,.manualbox strong{font-size:clamp(23px,2vw,36px);font-weight:950}.scanbox p,.manualbox p{color:#786e70;font-weight:650;font-size:clamp(15px,1.18vw,22px);margin:0;text-align:center}
+.scanbox button{border:0;border-radius:18px;background:#ff6541;color:white;min-width:80%;height:clamp(62px,7vh,90px);font-weight:900;font-size:clamp(21px,1.65vw,30px)}
+.manualbox input{width:100%;height:clamp(65px,8vh,100px);border:2px solid #e9dcd5;border-radius:17px;padding:0 17px;text-align:center;font-size:clamp(24px,2.2vw,43px);font-weight:900;letter-spacing:.02em;text-transform:uppercase;min-width:0}
+.review-card{background:white;border:2px solid #f0e1d9;border-radius:30px;width:min(100%,970px);padding:clamp(25px,4vw,64px);margin-top:clamp(24px,5vh,60px);text-align:left}
+.review-row{display:flex;justify-content:space-between;gap:15px;border-bottom:1px solid #f1e5df;padding:clamp(13px,2vh,28px) 0;font-size:clamp(19px,1.7vw,30px)}.review-row:last-child{border:0}.review-row span{color:#7d7377;font-weight:700}.review-row strong{font-weight:950}
+.done-icon{font-size:clamp(85px,9vw,165px);margin-bottom:20px}.error{color:#c62d36}
+.overlay{position:fixed;inset:0;background:#201414d9;display:grid;place-items:center;padding:20px;z-index:50}.hidden{display:none!important}.modal{width:min(100%,850px);background:white;border-radius:29px;padding:30px;text-align:center}.modal h2{font-size:33px;margin:0 0 12px}.modal p{font-size:20px;color:#645f62}.modal video{width:100%;max-height:55vh;border-radius:15px;background:#15151c;object-fit:cover}.modal button{margin-top:16px;border:0;background:#ff6541;color:white;border-radius:17px;padding:18px 55px;font-size:22px;font-weight:900}
+@media(min-width:1000px) and (min-aspect-ratio:16/10){.shell{height:100dvh}.page{overflow:hidden}}
+@media(max-width:900px){.shell{min-height:100dvh}.header{padding:10px 20px}.choice-grid{margin:30px 0}.tiles{grid-template-columns:repeat(5,minmax(0,1fr))}.qr-area{grid-template-columns:1fr}.scanbox,.manualbox{min-height:210px}.page{min-height:540px}.bottom{flex-wrap:wrap}.summary{order:-1;width:100%}}
+@media(max-width:550px){.header-aside .stock{display:none}.brand{font-size:23px}.choice-grid{gap:11px}.choice{min-height:230px;border-radius:21px}.choice strong{font-size:23px}.choice small{font-size:13px}.choice .symbol{font-size:62px}h1{font-size:37px}.sub{font-size:17px}.tiles{grid-template-columns:repeat(4,minmax(0,1fr));max-height:52vh}.tile{min-height:67px}.seg button{min-width:85px;padding:8px}.bottom{padding:12px}.back{min-width:100px}.primary{min-width:175px;flex:1}.page{min-height:530px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
-</style>
-</head>
+</style></head>
 <body>
-<div class="kiosk">
-<header class="top">
-  <div class="brand"><div class="logo" aria-hidden="true">☂️</div><div><h1>계성 우산</h1><p>학교 공용 우산 · 간편 대여 및 반납</p></div></div>
-  <div class="top-right"><span class="live" id="available">● 우산 현황 확인 중</span><a class="admin" href="/admin">관리자</a></div>
-</header>
-<main class="layout">
-  <section class="panel left" aria-label="우산 인식">
-    <div><div class="step">STEP 01</div><h2>우산을 인식해주세요</h2><p class="desc">우산에 부착된 QR 코드를 스캔하거나 ID를 입력하세요.</p></div>
-    <div class="scan-card"><div class="scan-icon" aria-hidden="true">▦</div><strong>QR 코드를 스캔하세요</strong><p>카메라로 우산의 코드를 인식합니다.</p><button class="scan-button" id="scan">📷 QR 스캔 시작</button></div>
-    <div class="manual"><label for="umbrella">우산 ID</label><input id="umbrella" placeholder="UMB-0001" maxlength="30" autocomplete="off" spellcheck="false" aria-label="우산 ID 수동 입력"></div>
+<div class="shell">
+ <header class="header">
+ <div class="brand"><div class="mark">☂</div><span>계성 우산</span></div>
+ <div class="header-aside"><span class="stock" id="stock">대여 가능 확인 중</span><a class="admin" href="/admin">관리자 ↗</a></div>
+ </header>
+ <main>
+  <section class="page active" id="welcome"><div class="center">
+   <p class="eyebrow">KEISUNG UMBRELLA</p><h1>우산이 필요하신가요?</h1><p class="sub">버튼을 눌러 대여 또는 반납을 시작해 주세요.</p>
+   <div class="choice-grid"><button class="choice borrow" id="startBorrow"><span class="symbol">☂</span><strong>우산 빌리기</strong><small>QR 인식 후 간편 대여</small></button><button class="choice return" id="startReturn"><span class="symbol">↩</span><strong>우산 반납하기</strong><small>빌린 우산을 돌려주세요</small></button></div>
+  </div></section>
+  <section class="page" id="student"><div class="progress"><span class="current"></span><span></span><span></span></div>
+   <h2 class="step-title">학생 정보를 선택해 주세요</h2><p class="step-sub">학년 · 반 · 번호를 순서대로 눌러 주세요.</p>
+   <div class="selection-wrap"><div class="seg" id="seg"></div><div class="tiles" id="tiles"></div></div>
   </section>
-  <section class="panel right" aria-label="학생 정보">
-    <div><div class="step">STEP 02</div><h2>학생 정보를 입력해주세요</h2><p class="desc">학년, 반, 번호를 선택하고 대여 또는 반납을 누르세요.</p></div>
-    <div class="inputs"><div class="control"><label for="grade">학년</label><select id="grade"></select></div><div class="control"><label for="classroom">반</label><select id="classroom"></select></div><div class="control"><label for="number">번호</label><select id="number"></select></div></div>
-    <div class="actions"><button id="borrow" class="action borrow"><span>☂</span>대여하기</button><button id="return" class="action return"><span>✓</span>반납하기</button></div>
-    <div class="hint">한 학생당 우산은 1개만 빌릴 수 있어요. 다른 학생의 정보를 입력하지 마세요. 반납할 때도 같은 학년·반·번호를 선택해 주세요.</div>
+  <section class="page" id="qr"><div class="progress"><span class="current"></span><span class="current"></span><span></span></div>
+   <h2 class="step-title">우산 QR 코드를 인식해 주세요</h2><p class="step-sub">우산에 붙은 QR을 스캔하거나 우산 ID를 입력할 수 있어요.</p>
+   <div class="center"><div class="qr-area"><div class="scanbox"><span class="qr-icon">▦</span><strong>QR 코드 스캔</strong><p>카메라로 우산 코드를 비춰 주세요.</p><button id="scan">QR 스캔 시작</button></div><div class="manualbox"><span class="qr-icon">⌨</span><strong>직접 입력</strong><p>우산 스티커의 ID를 입력해 주세요.</p><input id="umbrella" placeholder="UMB-0001" maxlength="30" autocomplete="off" spellcheck="false" aria-label="우산 ID"></div></div></div>
   </section>
-</main>
-<footer class="footer"><span>KEISUNG UMBRELLA · SCHOOL KIOSK</span><span>학교 운영 전 학생 본인 인증 및 개인정보 보호 검토 필요</span></footer>
+  <section class="page" id="review"><div class="progress"><span class="current"></span><span class="current"></span><span class="current"></span></div>
+   <div class="center"><p class="eyebrow">마지막 단계</p><h1>정보가 맞는지 확인해 주세요</h1><p class="sub">다른 학생의 정보를 입력하면 안 돼요.</p>
+   <div class="review-card"><div class="review-row"><span>이용 방법</span><strong id="vAction">대여</strong></div><div class="review-row"><span>학생</span><strong id="vStudent">-</strong></div><div class="review-row"><span>우산</span><strong id="vUmbrella">-</strong></div></div></div>
+  </section>
+  <section class="page" id="done"><div class="center"><div class="done-icon" id="doneIcon">✅</div><h1 id="doneTitle">완료되었습니다!</h1><p class="sub" id="doneMessage">이용해 주셔서 감사합니다.</p></div></section>
+ </main>
+ <footer class="bottom"><button class="back" id="back">처음으로</button><span class="summary" id="summary">한 학생당 우산 1개까지 대여 가능</span><button class="primary hidden" id="next">다음 단계 →</button></footer>
 </div>
-<div class="overlay hidden" id="dialog" role="dialog" aria-modal="true" aria-labelledby="dialogTitle">
-  <div class="dialog"><h3 id="dialogTitle">확인</h3><p id="dialogText"></p><div id="cameraWrap" class="hidden"><video id="video" muted playsinline></video></div><div class="dialog-actions"><button id="cancel">닫기</button><button id="confirm" class="primary">확인</button></div></div>
-</div>
+<div class="overlay hidden" id="overlay" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><div class="modal"><h2 id="modalTitle">QR 스캔</h2><p id="modalText">카메라에 QR을 보여주세요.</p><video id="video" playsinline muted></video><button id="closeModal">닫기</button></div></div>
 <script>
 "use strict";
-const $=id=>document.getElementById(id);
-let stream=null,timer=null,detecting=false,dialogCallback=null,busy=false;
-const qrPattern=/^UMB-\d{4,}$/;
-for(const [id,count,suffix] of [["grade",6,"학년"],["classroom",12,"반"],["number",40,"번"]]){
-  for(let i=1;i<=count;i++)$(id).add(new Option(i+suffix,String(i)));
-  $(id).value="";
-  $(id).insertBefore(new Option("선택","",true,true),$(id).firstChild);
+const $=id=>document.getElementById(id),pages=["welcome","student","qr","review","done"];
+let step=0,mode="borrow",grade=0,klass=0,number=0,part=0,stream=null,interval=null,detecting=false,busy=false;
+const names=["학년","반","번호"],limits=[6,12,40];
+function modalError(title,msg){$("modalTitle").textContent=title;$("modalText").textContent=msg;$("video").classList.add("hidden");$("overlay").classList.remove("hidden");}
+function hideModal(){stopScan();$("overlay").classList.add("hidden");}
+function stopScan(){if(interval){clearInterval(interval);interval=null;}if(stream){for(const t of stream.getTracks())t.stop();stream=null;}$("video").srcObject=null;detecting=false;}
+$("closeModal").onclick=hideModal;
+function show(n){
+ step=n;pages.forEach((id,i)=>$(id).classList.toggle("active",i===n));
+ $("back").classList.toggle("hidden",n===4);
+ $("next").classList.toggle("hidden",n===0||n===4);
+ $("next").disabled=false;
+ if(n===1){renderTiles();}
+ if(n===2){$("next").textContent="정보 확인 →";$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase());}
+ if(n===3){$("next").textContent=mode==="borrow"?"대여 확정하기":"반납 확정하기";$("vAction").textContent=mode==="borrow"?"우산 대여":"우산 반납";$("vStudent").textContent=grade+"학년 "+klass+"반 "+number+"번";$("vUmbrella").textContent=$("umbrella").value.trim().toUpperCase();}
+ $("summary").textContent=n===0?"한 학생당 우산 1개까지 대여 가능":n===4?"안전하게 이용해 주세요":mode==="borrow"?"우산 대여 진행 중":"우산 반납 진행 중";
 }
-function openDialog(title,text,confirmLabel=null,callback=null){
-  $("dialogTitle").textContent=title;$("dialogText").textContent=text;
-  $("cameraWrap").classList.add("hidden");$("confirm").classList.toggle("hidden",!confirmLabel);
-  $("confirm").textContent=confirmLabel||"확인";dialogCallback=callback;
-  $("dialog").classList.remove("hidden");$("cancel").focus();
+function start(m){mode=m;grade=0;klass=0;number=0;part=0;$("umbrella").value="";show(1);}
+$("startBorrow").onclick=()=>start("borrow");$("startReturn").onclick=()=>start("return");
+function renderTiles(){
+ const vals=[grade,klass,number],active=part;
+ $("seg").innerHTML=names.map((s,i)=>'<button data-part="'+i+'" class="'+(i===part?"selected":"")+'">'+s+(vals[i]?" "+vals[i]:"")+'</button>').join("");
+ for(const b of $("seg").children)b.onclick=()=>{part=Number(b.dataset.part);renderTiles();};
+ $("tiles").innerHTML="";
+ for(let i=1;i<=limits[active];i++){const b=document.createElement("button");b.className="tile"+(vals[active]===i?" selected":"");b.textContent=i;b.onclick=()=>{if(active===0)grade=i;if(active===1)klass=i;if(active===2)number=i;if(active<2){part=active+1;}renderTiles();};$("tiles").append(b);}
+ $("next").textContent="다음 단계 →";$("next").disabled=!(grade&&klass&&number);
 }
-function closeDialog(){stopCamera();$("dialog").classList.add("hidden");dialogCallback=null;}
-$("cancel").onclick=closeDialog;
-$("confirm").onclick=async()=>{const fn=dialogCallback;closeDialog();if(fn)await fn();};
-async function api(path,body){const r=await fetch(path,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"same-origin"});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(typeof d.detail==="string"?d.detail:"오류가 발생했습니다. ("+r.status+")");return d;}
-async function refresh(){try{const list=await api("/api/umbrellas");const n=list.filter(u=>u.status==="AVAILABLE").length;$("available").textContent="● 대여 가능 "+n+"개";}catch{$("available").textContent="● 서버 연결 확인 필요";}}
-function values(){return{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade:Number($("grade").value),classroom:Number($("classroom").value),number:Number($("number").value)};}
-function clearForm(){$("umbrella").value="";for(const id of ["grade","classroom","number"])$(id).value="";}
-function submit(action){
-  if(busy)return;
-  const v=values();
-  if(!qrPattern.test(v.umbrella_id))return openDialog("우산 ID를 확인해주세요","QR 스캔 또는 UMB-0001 형태의 ID가 필요해요.");
-  if(!v.grade||!v.classroom||!v.number)return openDialog("학생 정보를 선택해주세요","학년, 반, 번호를 모두 선택해주세요.");
-  const word=action==="borrow"?"대여":"반납";
-  openDialog(word+" 확인",v.grade+"학년 "+v.classroom+"반 "+v.number+"번\n우산: "+v.umbrella_id+"\n\n"+word+"하시겠어요?",word+" 확정",async()=>{
-    busy=true;$("borrow").disabled=true;$("return").disabled=true;
-    try{await api("/api/"+action,v);clearForm();openDialog(word+" 완료!","처리가 완료되었습니다.\n"+(action==="borrow"?"우산을 안전하게 사용해주세요.":"반납해 주셔서 감사합니다!"));await refresh();}
-    catch(e){openDialog(word+" 실패",e.message);}
-    finally{busy=false;$("borrow").disabled=false;$("return").disabled=false;}
-  });
+$("umbrella").addEventListener("input",()=>{$("umbrella").value=$("umbrella").value.toUpperCase();if(step===2)$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim());});
+$("back").onclick=()=>{if(busy)return;if(step===1)show(0);else if(step===2)show(1);else if(step===3)show(2);};
+async function api(path,body){const res=await fetch(path,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"same-origin"});const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(typeof data.detail==="string"?data.detail:"서버 오류 "+res.status);return data;}
+async function finalize(){
+ if(busy)return;
+ busy=true;$("next").disabled=true;
+ try{await api("/api/"+mode,{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade,classroom:klass,number});
+   $("doneIcon").textContent="✅";$("doneTitle").textContent=mode==="borrow"?"대여가 완료됐어요!":"반납이 완료됐어요!";
+   $("doneMessage").textContent=mode==="borrow"?"우산을 잘 사용하고 반납해 주세요.":"반납해 주셔서 고마워요.";show(4);await refresh();
+ }catch(err){$("doneIcon").textContent="⚠️";$("doneTitle").textContent="처리하지 못했어요";$("doneMessage").textContent=err.message;show(4);}
+ finally{busy=false;}
 }
-$("borrow").onclick=()=>submit("borrow");$("return").onclick=()=>submit("return");
-function stopCamera(){if(timer){clearInterval(timer);timer=null;}if(stream){for(const t of stream.getTracks())t.stop();stream=null;}$("video").srcObject=null;detecting=false;}
+$("next").onclick=()=>{if(step===1&&grade&&klass&&number)show(2);else if(step===2&&/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase()))show(3);else if(step===3)finalize();};
+async function refresh(){try{const data=await api("/api/umbrellas");$("stock").textContent="● 대여 가능 "+data.filter(x=>x.status==="AVAILABLE").length+"개";}catch{$("stock").textContent="● 연결 확인 필요";}}
 $("scan").onclick=async()=>{
-  if(!("BarcodeDetector" in window)||!navigator.mediaDevices?.getUserMedia)return openDialog("QR 스캔을 지원하지 않아요","이 브라우저에서는 QR 인식이 어려워요. 우산 ID를 직접 입력해주세요.");
-  try{
-    const detector=new BarcodeDetector({formats:["qr_code"]});
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
-    openDialog("우산 QR 스캔","카메라 안에 QR 코드를 보여주세요.");
-    $("cameraWrap").classList.remove("hidden");$("video").srcObject=stream;await $("video").play();
-    timer=setInterval(async()=>{
-      if(detecting||!stream)return;detecting=true;
-      try{const results=await detector.detect($("video"));if(results.length){const value=results[0].rawValue.trim().toUpperCase();closeDialog();if(qrPattern.test(value)){$("umbrella").value=value;openDialog("인식 완료!",value+" 우산이 인식됐어요. 학생 정보를 선택해주세요.");}else openDialog("잘못된 QR 코드","우산 ID가 포함된 QR 코드를 스캔해주세요.");}}
-      catch(e){console.warn(e);}finally{detecting=false;}
-    },350);
-  }catch(e){closeDialog();openDialog("카메라를 사용할 수 없어요","카메라 권한과 HTTPS 접속을 확인하거나 우산 ID를 직접 입력해주세요.");}
+ if(!("BarcodeDetector" in window)||!navigator.mediaDevices?.getUserMedia)return modalError("카메라 스캔 미지원","우산 ID를 오른쪽에 직접 입력해 주세요.");
+ try{
+  const detector=new BarcodeDetector({formats:["qr_code"]});
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+  $("modalTitle").textContent="QR 코드 스캔";$("modalText").textContent="우산 스티커의 QR 코드를 화면에 맞춰 주세요.";
+  $("overlay").classList.remove("hidden");$("video").classList.remove("hidden");$("video").srcObject=stream;await $("video").play();
+  interval=setInterval(async()=>{if(detecting||!stream)return;detecting=true;try{const v=await detector.detect($("video"));if(v.length){const id=v[0].rawValue.trim().toUpperCase();hideModal();if(/^UMB-\d{4,}$/.test(id)){$("umbrella").value=id;$("next").disabled=false;}else modalError("잘못된 QR 코드","UMB-0001 형태의 우산 QR 코드를 인식해 주세요.");}}catch(e){console.warn(e);}finally{detecting=false;}},350);
+ }catch{hideModal();modalError("카메라 접근 실패","HTTPS 연결과 카메라 권한을 확인해 주세요.");}
 };
-window.addEventListener("pagehide",stopCamera);
+window.addEventListener("pagehide",stopScan);
 refresh();setInterval(refresh,30000);
 </script>
 </body></html>
