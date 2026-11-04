@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#ff6541">
+<title>Keisung Umbrella · 교직원 대여</title>
+<link rel="icon" href="/assets/keisung-icon-64.png">
+<style>
+:root{font-family:Pretendard,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;color:#252735;background:#fff8f5;font-synthesis:none}
+*{box-sizing:border-box}
+body{margin:0;min-height:100dvh}
+button,input{font:inherit}
+button{cursor:pointer}
+button:disabled{cursor:wait;opacity:.5}
+button:focus-visible,input:focus-visible,a:focus-visible{outline:3px solid #ff6541;outline-offset:3px}
+header{display:flex;justify-content:space-between;align-items:center;background:white;border-bottom:1px solid #f0e2db;padding:18px clamp(16px,5vw,65px);gap:14px;flex-wrap:wrap}
+.brand{font-size:clamp(22px,3vw,31px);font-weight:950;letter-spacing:-.06em;color:#24232b;text-decoration:none}
+.brand span{color:#fb6142}
+nav{display:flex;align-items:center;gap:16px}
+nav a{font-size:14px;color:#726d74;text-decoration:none;font-weight:750}
+main{padding:clamp(20px,4vw,52px) 15px 50px;margin:auto;max-width:780px}
+.eyebrow{font-size:13px;color:#dc5938;font-weight:900;letter-spacing:.12em;margin:0 0 9px}
+h1{font-size:clamp(31px,5vw,46px);letter-spacing:-.055em;margin:0 0 12px}
+.lead{color:#686572;line-height:1.6;margin:0 0 24px}
+.panel{background:white;border:1px solid #f0e5df;border-radius:22px;padding:clamp(18px,4vw,34px);box-shadow:0 9px 28px #a56d4610}
+.modes{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:23px}
+.mode{background:#fff7f2;border:2px solid #f4e4da;color:#54433b;border-radius:15px;padding:17px 5px;font-weight:900;font-size:18px}
+.mode.active{border-color:#fa684b;background:#ff6541;color:white}
+.field{margin:14px 0}
+label{display:block;font-size:14px;font-weight:830;margin-bottom:7px}
+input{height:58px;width:100%;border:2px solid #e4e3e7;border-radius:13px;padding:0 15px;background:#fff;font-size:19px;font-weight:750}
+input:focus{border-color:#ff765b}
+input[type=password]{letter-spacing:.25em}
+.row{display:flex;gap:11px;flex-wrap:wrap}
+.row>*{flex:1 1 210px}
+.helper{color:#6c7281;font-size:13px;line-height:1.6;margin:11px 0}
+.btn{border:0;background:#ff6541;color:white;border-radius:13px;padding:16px 18px;font-size:17px;font-weight:900}
+.btn.secondary{background:#f5f0ed;color:#57515b}
+.btn.full{width:100%;margin-top:14px;min-height:58px}
+.message{background:#f2faf7;color:#125740;border:1px solid #bfebd7;border-radius:13px;padding:14px 17px;margin:18px 0 0;line-height:1.6;white-space:pre-line;font-weight:720}
+.message.error{background:#fff3f3;color:#9d3030;border-color:#f3c9c9}
+[hidden]{display:none!important}
+#scanBox{margin-top:14px;background:#f6f8fa;border-radius:12px;padding:12px}
+video{display:block;width:100%;max-height:280px;background:#202534;object-fit:contain;border-radius:11px}
+footer{color:#8b8290;text-align:center;font-size:12px;padding:20px;line-height:1.7}
+@media(max-width:520px){.mode{font-size:16px}.row>*{flex-basis:130px}}
+</style>
+</head>
+<body>
+<header><a class="brand" href="/">☂️ Keisung <span>Umbrella</span></a><nav><a href="/">학생용</a><a href="/admin">관리자</a></nav></header>
+<main>
+<p class="eyebrow">STAFF SELF-SERVICE</p>
+<h1>교직원 우산 대여·반납</h1>
+<p class="lead">관리자에게 발급받은 교직원 ID와 6자리 PIN으로 우산을 대여하거나 반납할 수 있어요. 학생 월 대여 횟수와는 별도로 관리됩니다.</p>
+<section class="panel">
+<div class="modes" role="group" aria-label="이용 유형"><button class="mode active" id="modeBorrow" type="button" aria-pressed="true">☂️ 우산 대여</button><button class="mode" id="modeReturn" type="button" aria-pressed="false">↩ 우산 반납</button></div>
+<form id="staffForm" autocomplete="off">
+<div class="field"><label for="staffId">교직원 ID</label><input id="staffId" required minlength="3" maxlength="20" placeholder="예: TEACH01" spellcheck="false" autocapitalize="characters"></div>
+<div class="field"><label for="staffPin">교직원 PIN (6자리)</label><input id="staffPin" type="password" inputmode="numeric" required minlength="6" maxlength="6" pattern="[0-9]{6}" autocomplete="off" placeholder="••••••"></div>
+<div class="field"><label for="umbrellaId">우산 번호</label><input id="umbrellaId" required placeholder="UMB-0001" spellcheck="false" autocomplete="off" aria-describedby="numberHelp"></div>
+<p class="helper" id="numberHelp">우산의 QR을 스캔하거나 네임펜으로 적힌 우산 번호를 입력해 주세요.</p>
+<div class="row"><button class="btn secondary" id="cameraToggle" type="button">▣ QR 카메라 스캔</button><button class="btn secondary" id="clearForm" type="button">↺ 입력 초기화</button></div>
+<div id="scanBox" hidden><video id="scanVideo" autoplay muted playsinline></video><p class="helper">카메라는 HTTPS 또는 localhost에서만 사용할 수 있습니다. 사용 후 반드시 끄세요.</p></div>
+<button class="btn full" id="submitAction" type="submit">대여 완료하기</button>
+</form>
+<div class="message" id="message" role="status" aria-live="polite" hidden></div>
+</section>
+</main>
+<footer>교직원 1명당 동시 대여 우산은 1개입니다. 대여 기간은 학교 관리자가 설정하며, 무단 반출 알림 및 자동 패널티 기능은 없습니다.</footer>
+<script src="/assets/jsQR.js"></script>
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+let mode="borrow",busy=false,stream=null,timer=null,decoder=null,decoding=false,lastCode="",lastAt=0;
+const canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{willReadFrequently:true});
+function message(text,error=false){
+ const el=$("message");el.hidden=false;el.className="message"+(error?" error":"");el.textContent=text;
+}
+function normalizeUmbrella(value){
+ const text=String(value||"").trim().toUpperCase();
+ if(/^\d{1,9}$/.test(text)){const num=Number(text);return num>0?"UMB-"+String(num).padStart(4,"0"):null;}
+ if(/^UMB-\d{4,}$/.test(text))return text;
+ const match=text.match(/(?:^|[^A-Z0-9])UMB-\d{4,}(?:$|[^0-9])/);
+ if(match){const id=match[0].match(/UMB-\d{4,}/);return id?.[0]||null;}
+ return null;
+}
+function setMode(value){
+ mode=value;
+ for(const [name,button] of [["borrow",$("modeBorrow")],["return",$("modeReturn")]]){
+  button.classList.toggle("active",name===value);
+  button.setAttribute("aria-pressed",String(name===value));
+ }
+ $("submitAction").textContent=value==="borrow"?"대여 완료하기":"반납 완료하기";
+ $("message").hidden=true;
+}
+$("modeBorrow").onclick=()=>setMode("borrow");
+$("modeReturn").onclick=()=>setMode("return");
+$("staffId").addEventListener("input",()=>{$("staffId").value=$("staffId").value.toUpperCase().replace(/[^A-Z0-9_-]/g,"").slice(0,20);});
+$("staffPin").addEventListener("input",()=>{$("staffPin").value=$("staffPin").value.replace(/\D/g,"").slice(0,6);});
+$("umbrellaId").addEventListener("blur",()=>{
+ const n=normalizeUmbrella($("umbrellaId").value);if(n)$("umbrellaId").value=n;
+});
+$("clearForm").onclick=()=>{
+ stopCamera();$("staffForm").reset();$("message").hidden=true;$("staffId").focus();
+};
+$("staffForm").onsubmit=async e=>{
+ e.preventDefault();if(busy)return;
+ const staff_id=$("staffId").value.trim().toUpperCase();
+ const umbrella_id=normalizeUmbrella($("umbrellaId").value),pin=$("staffPin").value;
+ if(!/^[A-Z0-9][A-Z0-9_-]{2,19}$/.test(staff_id)||!/^\d{6}$/.test(pin)||!umbrella_id){
+  message("교직원 ID, 6자리 PIN, 우산 번호를 확인해 주세요.",true);return;
+ }
+ busy=true;$("submitAction").disabled=true;stopCamera();
+ try{
+  const response=await fetch("/api/staff/"+mode,{method:"POST",headers:{"Content-Type":"application/json"},
+   credentials:"same-origin",cache:"no-store",body:JSON.stringify({staff_id,umbrella_id,pin})});
+  const data=await response.json().catch(()=>({}));
+  if(!response.ok)throw Error(typeof data.detail==="string"?data.detail:"요청 실패 ("+response.status+")");
+  const due=data.due_at?new Date(data.due_at).toLocaleString("ko-KR",{timeZone:"Asia/Seoul",year:"numeric",month:"long",day:"numeric",hour:"2-digit",minute:"2-digit"}):"관리자 확인";
+  message(mode==="borrow"?"우산 "+umbrella_id+" 대여 완료!\n반납 예정: "+due:"우산 "+umbrella_id+" 반납 완료!");
+  $("staffPin").value="";$("umbrellaId").value="";
+ }catch(error){message(error.message,true);$("staffPin").value="";}
+ finally{busy=false;$("submitAction").disabled=false;}
+};
+function stopCamera(){
+ if(timer){clearInterval(timer);timer=null;}
+ if(stream){for(const track of stream.getTracks())track.stop();stream=null;}
+ const video=$("scanVideo");video.pause();video.srcObject=null;
+ $("scanBox").hidden=true;$("cameraToggle").textContent="▣ QR 카메라 스캔";
+ decoder=null;decoding=false;
+}
+async function decode(video){
+ if(decoder){try{const found=await decoder.detect(video);return found[0]?.rawValue||null;}
+ catch(error){console.warn("BarcodeDetector fallback",error);decoder=null;}}
+ if(!ctx||typeof jsQR!=="function"||!video.videoWidth)return null;
+ const scale=Math.min(1,640/Math.max(video.videoWidth,video.videoHeight));
+ canvas.width=Math.round(video.videoWidth*scale);canvas.height=Math.round(video.videoHeight*scale);
+ ctx.drawImage(video,0,0,canvas.width,canvas.height);
+ const pixels=ctx.getImageData(0,0,canvas.width,canvas.height);
+ return jsQR(pixels.data,pixels.width,pixels.height,{inversionAttempts:"attemptBoth"})?.data||null;
+}
+$("cameraToggle").onclick=async()=>{
+ if(stream){stopCamera();return;}
+ if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia){
+  message("카메라는 HTTPS 또는 localhost에서만 쓸 수 있어요. 우산 번호를 직접 입력해 주세요.",true);return;
+ }
+ try{
+  if(typeof BarcodeDetector!=="undefined"){
+   const formats=await BarcodeDetector.getSupportedFormats?.();
+   if(!formats||formats.includes("qr_code"))decoder=new BarcodeDetector({formats:["qr_code"]});
+  }
+  if(!decoder&&typeof jsQR!=="function")throw Error("QR 인식 기능을 지원하지 않는 브라우저입니다.");
+  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+  const video=$("scanVideo");video.srcObject=stream;$("scanBox").hidden=false;await video.play();
+  $("cameraToggle").textContent="카메라 끄기";
+  timer=setInterval(async()=>{
+   if(decoding||busy||!stream)return;
+   decoding=true;
+   try{
+    const value=normalizeUmbrella(await decode(video));
+    if(value&&!(value===lastCode&&Date.now()-lastAt<3500)){
+     lastCode=value;lastAt=Date.now();$("umbrellaId").value=value;
+     message("우산 "+value+" QR 확인! 이제 대여·반납 버튼을 눌러 주세요.");
+     stopCamera();
+    }
+   }catch(error){console.warn("QR read failed",error);}
+   finally{decoding=false;}
+  },400);
+ }catch(error){stopCamera();message("카메라 실행 실패: "+error.message,true);}
+};
+window.addEventListener("pagehide",stopCamera);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")stopCamera();});
+</script>
+</body>
+</html>
