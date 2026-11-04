@@ -100,7 +100,7 @@ def test_loan_due_dates_overdue_extension_history_and_return(client):
     assert client.get("/api/admin/rentals").json()["total"]==0
     assert post(client,endpoint,{"extra_days":2,"reason":"사후 연장 시도 차단"},auth).status_code==409
     backup=client.get("/api/admin/export").json()
-    assert backup["schema_version"]=="3.4"
+    assert backup["schema_version"]=="3.5"
     assert len(backup["rental_terms"])==1
     assert backup["rental_terms"][0]["returned_at"]
     assert len(backup["rental_extensions"])==1
