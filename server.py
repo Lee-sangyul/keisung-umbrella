@@ -99,7 +99,13 @@ def init_db():
         c.close()
     with transaction() as c:
         salt = secrets.token_bytes(16)
-        c.execute("INSERT OR IGNORE INTO admins(username,salt,pw_hash) VALUES (?,?,?)",
+        # .env is the source of truth for the single bootstrap admin.
+        # Updating it must also update an account that was already created in SQLite.
+        c.execute("DELETE FROM sessions")
+        c.execute("DELETE FROM admins WHERE username <> ?", (ADMIN_USERNAME,))
+        c.execute("""INSERT INTO admins(username,salt,pw_hash) VALUES (?,?,?)
+                     ON CONFLICT(username) DO UPDATE SET
+                       salt=excluded.salt,pw_hash=excluded.pw_hash""",
                   (ADMIN_USERNAME, salt, password_hash(ADMIN_PASSWORD, salt)))
 
 
