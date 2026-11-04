@@ -100,6 +100,16 @@ def init_db():
             csrf TEXT NOT NULL,
             expires_at INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS student_pins (
+            student_id TEXT PRIMARY KEY,
+            salt BLOB NOT NULL,
+            pin_hash BLOB NOT NULL,
+            failed_attempts INTEGER NOT NULL DEFAULT 0,
+            last_failed_at INTEGER NOT NULL DEFAULT 0,
+            locked_until INTEGER NOT NULL DEFAULT 0,
+            updated_at TEXT NOT NULL,
+            updated_by TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS policies (
             key TEXT PRIMARY KEY,
             value INTEGER NOT NULL
@@ -213,6 +223,7 @@ class StudentRequest(BaseModel):
     grade: int = Field(ge=1, le=6)
     classroom: int = Field(ge=1, le=4)
     number: int = Field(ge=1, le=36)
+    pin: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
 
 
 class LoginRequest(BaseModel):
@@ -273,6 +284,75 @@ def validate_student(student):
     return student
 
 
+class StudentPinIssueRequest(BaseModel):
+    student_id: str
+    verified_identity: bool = False
+
+
+def student_pin_hash(pin: str, salt: bytes) -> bytes:
+    return hashlib.scrypt(pin.encode("ascii"), salt=salt, n=2**14, r=8, p=1, dklen=32)
+
+
+def check_student_pin(c, student: str, pin: str) -> str:
+    """Return ok/invalid/locked. Never throw inside transaction or failed-attempt updates roll back."""
+    current = int(time.time())
+    row = c.execute(
+        "SELECT * FROM student_pins WHERE student_id=?", (student,)
+    ).fetchone()
+    if row and row["locked_until"] > current:
+        return "locked"
+    salt = row["salt"] if row else b"0" * 16
+    hashed = student_pin_hash(pin, salt)  # Dummy hash even for missing students.
+    if row and hmac.compare_digest(hashed, row["pin_hash"]):
+        if row["failed_attempts"] or row["locked_until"]:
+            c.execute(
+                "UPDATE student_pins SET failed_attempts=0,last_failed_at=0,locked_until=0 WHERE student_id=?",
+                (student,)
+            )
+        return "ok"
+    if row:
+        failures = (row["failed_attempts"] if current - row["last_failed_at"] < 900 else 0) + 1
+        lock = current + 900 if failures >= 5 else 0
+        c.execute(
+            "UPDATE student_pins SET failed_attempts=?,last_failed_at=?,locked_until=? WHERE student_id=?",
+            (failures, current, lock, student)
+        )
+        if lock:
+            return "locked"
+    return "invalid"
+
+
+def student_pin_error(result: str):
+    if result == "locked":
+        raise HTTPException(429, "PIN 입력 실패가 누적되어 15분간 인증이 제한됩니다. 담당 선생님께 문의하세요.")
+    if result != "ok":
+        raise HTTPException(401, "학생 PIN이 일치하지 않거나 등록되지 않았습니다. 담당 선생님께 확인하세요.")
+
+
+@app.post("/api/admin/student-pin")
+def issue_student_pin(data: StudentPinIssueRequest, request: Request):
+    """Only an admin who verified the student's identity may create/reset a one-time PIN."""
+    actor = require_admin(request, csrf=True)
+    student = validate_student(data.student_id)
+    if not data.verified_identity:
+        raise HTTPException(422, "학생 신원을 직접 확인한 뒤 발급해 주세요.")
+    pin = f"{secrets.randbelow(1000000):06d}"
+    salt = secrets.token_bytes(16)
+    digest = student_pin_hash(pin, salt)
+    with transaction() as c:
+        c.execute(
+            """INSERT INTO student_pins(student_id,salt,pin_hash,failed_attempts,last_failed_at,
+               locked_until,updated_at,updated_by) VALUES(?,?,?,0,0,0,?,?)
+               ON CONFLICT(student_id) DO UPDATE SET salt=excluded.salt,pin_hash=excluded.pin_hash,
+               failed_attempts=0,last_failed_at=0,locked_until=0,
+               updated_at=excluded.updated_at,updated_by=excluded.updated_by""",
+            (student, salt, digest, now(), actor)
+        )
+    return Response(content=json.dumps({"student_id":student,"pin":pin},ensure_ascii=False),
+                    media_type="application/json",
+                    headers={"Cache-Control":"no-store","Pragma":"no-cache"})
+
+
 class PolicyRequest(BaseModel):
     monthly_limit: int = Field(ge=1,le=100)
 
@@ -319,11 +399,14 @@ def student_record(student_id: str,request: Request):
     student=validate_student(student_id)
     with connect() as c:
         usage=month_usage(c,student)
+        pin_status=c.execute("SELECT locked_until,updated_at FROM student_pins WHERE student_id=?",(student,)).fetchone()
         umbrella=c.execute("SELECT id,status FROM umbrellas WHERE borrower=?",(student,)).fetchone()
         penalties=c.execute("""SELECT id,student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id
           FROM penalty_actions WHERE student_id=? ORDER BY id DESC LIMIT 200""",(student,)).fetchall()
         total=penalty_total(c,student)
-    return {"student_id":student,"usage":usage,"active_umbrella":uid(umbrella["id"]) if umbrella else None,
+    return {"student_id":student,"usage":usage,"has_pin":bool(pin_status),
+        "pin_locked":bool(pin_status and pin_status["locked_until"]>int(time.time())),
+        "active_umbrella":uid(umbrella["id"]) if umbrella else None,
         "penalty_points":total,
         "penalties":[{**dict(p),"umbrella_id":uid(p["umbrella_id"]) if p["umbrella_id"] else None} for p in penalties]}
 
@@ -406,41 +489,54 @@ def umbrellas():
 @app.post("/api/borrow")
 def borrow(data: StudentRequest):
     student = f"{data.grade}-{data.classroom}-{data.number}"
+    rejection = None
+    usage = None
     with transaction() as c:
-        u = c.execute("SELECT * FROM umbrellas WHERE id=?", (parse_id(data.umbrella_id),)).fetchone()
-        if not u:
-            raise HTTPException(404, "등록된 우산이 아닙니다.")
-        if u["status"] != "AVAILABLE":
-            raise HTTPException(409, "이 우산은 대여할 수 없습니다.")
-        if c.execute("SELECT 1 FROM umbrellas WHERE borrower=?", (student,)).fetchone():
-            raise HTTPException(409, "이미 대여 중인 우산이 있습니다.")
-        usage=month_usage(c,student)
-        if usage["remaining"]<=0:
-            raise HTTPException(
-                409,
-                f"이번 달 대여 가능 횟수를 모두 사용했습니다. "
-                f"(기본 {usage['limit']}회 + 추가 {usage['extra']}회 "
-                f"- 이번 달 패널티 {usage['penalty_deduction']}회 = "
-                f"최대 {usage['effective_limit']}회) 담당 선생님께 문의해 주세요."
-            )
-        rental = secrets.token_hex(16)
-        c.execute("UPDATE umbrellas SET status='BORROWED',borrower=?,rental_id=? WHERE id=?",
-                  (student, rental, u["id"]))
-        log(c, u["id"], "BORROW", student, rental, actor="self-service")
+        authentication = check_student_pin(c, student, data.pin)
+        if authentication != "ok":
+            rejection = authentication
+        else:
+            u = c.execute("SELECT * FROM umbrellas WHERE id=?", (parse_id(data.umbrella_id),)).fetchone()
+            if not u:
+                raise HTTPException(404, "등록된 우산이 아닙니다.")
+            if u["status"] != "AVAILABLE":
+                raise HTTPException(409, "이 우산은 대여할 수 없습니다.")
+            if c.execute("SELECT 1 FROM umbrellas WHERE borrower=?", (student,)).fetchone():
+                raise HTTPException(409, "이미 대여 중인 우산이 있습니다.")
+            usage = month_usage(c,student)
+            if usage["remaining"]<=0:
+                raise HTTPException(
+                    409,
+                    f"이번 달 대여 가능 횟수를 모두 사용했습니다. "
+                    f"(기본 {usage['limit']}회 + 추가 {usage['extra']}회 "
+                    f"- 이번 달 패널티 {usage['penalty_deduction']}회 = "
+                    f"최대 {usage['effective_limit']}회) 담당 선생님께 문의해 주세요."
+                )
+            rental = secrets.token_hex(16)
+            c.execute("UPDATE umbrellas SET status='BORROWED',borrower=?,rental_id=? WHERE id=?",
+                      (student, rental, u["id"]))
+            log(c, u["id"], "BORROW", student, rental, actor="self-service")
+    student_pin_error(rejection or "ok")
     return {"ok": True, "id": data.umbrella_id, "status": "BORROWED", "remaining":usage["remaining"]-1}
 
 
 @app.post("/api/return")
 def return_umbrella(data: StudentRequest):
     student = f"{data.grade}-{data.classroom}-{data.number}"
+    rejection = None
     with transaction() as c:
-        u = c.execute("SELECT * FROM umbrellas WHERE id=?", (parse_id(data.umbrella_id),)).fetchone()
-        if not u or u["status"] != "BORROWED":
-            raise HTTPException(409, "현재 대여 중인 우산이 아닙니다.")
-        if u["borrower"] != student:
-            raise HTTPException(403, "등록된 대여자 정보와 다릅니다.")
-        log(c, u["id"], "RETURN", student, u["rental_id"], actor="self-service")
-        c.execute("UPDATE umbrellas SET status='AVAILABLE',borrower=NULL,rental_id=NULL WHERE id=?", (u["id"],))
+        authentication = check_student_pin(c, student, data.pin)
+        if authentication != "ok":
+            rejection = authentication
+        else:
+            u = c.execute("SELECT * FROM umbrellas WHERE id=?", (parse_id(data.umbrella_id),)).fetchone()
+            if not u or u["status"] != "BORROWED":
+                raise HTTPException(409, "현재 대여 중인 우산이 아닙니다.")
+            if u["borrower"] != student:
+                raise HTTPException(403, "등록된 대여자 정보와 다릅니다.")
+            log(c, u["id"], "RETURN", student, u["rental_id"], actor="self-service")
+            c.execute("UPDATE umbrellas SET status='AVAILABLE',borrower=NULL,rental_id=NULL WHERE id=?", (u["id"],))
+    student_pin_error(rejection or "ok")
     return {"ok": True, "id": data.umbrella_id, "status": "AVAILABLE"}
 
 
