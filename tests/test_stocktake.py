@@ -42,9 +42,11 @@ def test_scoped_stocktake_batch_duplicates_export_and_no_inventory_mutation(clie
     headers = login(client)
     created = post(client, "/api/admin/umbrellas/batch", {"count": 4}, headers)
     assert created.status_code == 200
-    assert post(client, "/api/admin/inventory/locations", {
+    first_location = client.put("/api/admin/inventory/locations", headers=headers, json={
         "start_id": "UMB-0001", "end_id": "UMB-0002", "location": "본관 1층"
-    }, headers).json()["count"] == 2
+    })
+    assert first_location.status_code == 200, first_location.text
+    assert first_location.json()["count"] == 2
     assert client.put("/api/admin/inventory/locations", headers=headers,
                       json={"start_id": "UMB-0003", "end_id": "UMB-0003",
                             "location": "별관 1층"}).status_code == 200
