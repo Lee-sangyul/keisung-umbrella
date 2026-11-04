@@ -50,6 +50,9 @@
 .nav .nav-print-link{display:flex;align-items:center;gap:12px;color:#686b7b;text-decoration:none;min-height:49px;padding:12px 15px;border-radius:12px;font-size:15px;font-weight:800}
 .nav .nav-print-link:hover{background:#fff0ea;color:#ef5d37}
 
+.pin-admin-box{background:#f7f9ff;border:1px solid #dce5fa;border-radius:15px;padding:19px;margin:23px 0}
+.pin-admin-box h3{margin:0 0 10px;font-size:18px}
+.pin-secret{border:2px dashed #ea9f7e;border-radius:12px;background:white;padding:16px;font-size:clamp(18px,2.6vw,28px);letter-spacing:.1em;font-weight:900;color:#933e24;margin:12px 0;overflow-wrap:anywhere}
 .policy-breakdown{background:#fff1e9;border:1px solid #ffd7c5;border-radius:12px;padding:13px 16px;color:#a4482d;font-size:14px;font-weight:800;line-height:1.6;margin:0 0 20px}
 .policy-row,.allowance-row{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
 .policy-row .field,.allowance-row .field{width:min(300px,100%)}
@@ -159,6 +162,15 @@
     <div class="student-policy-card"><span>누적 패널티</span><strong id="studentPenaltyPoints">-</strong></div>
    </div>
    <p id="studentPenaltyBreakdown" class="policy-breakdown" aria-live="polite"></p>
+   <div class="pin-admin-box">
+    <h3>학생 PIN 발급·재발급</h3>
+    <p id="studentPinStatus" class="helper">PIN 상태 확인 중</p>
+    <p class="helper">학생 본인을 직접 확인한 후 발급하세요. 새 PIN은 숫자 6자리이며, 재발급하면 이전 PIN은 즉시 무효가 됩니다.</p>
+    <label class="confirm-penalty"><input type="checkbox" id="studentPinVerified"> 담당 교사가 학생의 신원을 직접 확인했습니다.</label>
+    <div class="actions"><button type="button" class="btn primary" id="issueStudentPin">PIN 발급 / 재발급</button><button type="button" class="btn hide" id="hideStudentPin">PIN 숨기기</button></div>
+    <div id="studentPinOutput" class="pin-secret hide" role="status" aria-live="polite"></div>
+    <p class="helper">발급한 PIN은 이 화면에서 한 번만 표시됩니다. 학생 본인에게 비공개로 전달하고, 공유 PC에 기록을 남기지 마세요.</p>
+   </div>
    <div class="allowance-row">
     <div class="field"><label for="extraAllowance">이번 달 추가 대여 허용 횟수</label><input class="input" id="extraAllowance" type="number" min="0" max="100" value="0"></div>
     <button class="btn" type="button" id="saveAllowance">추가 횟수 저장</button>
@@ -367,6 +379,10 @@ async function loadPolicyStudent(id){
   $("studentPenaltyBreakdown").textContent="기본 "+data.usage.limit+"회 + 추가 "+data.usage.extra+"회 − 이번 달 패널티 "+data.usage.penalty_deduction+"회 = 실제 한도 "+data.usage.effective_limit+"회";
   $("studentPenaltyPoints").textContent=data.penalty_points+"점";
   $("extraAllowance").value=data.usage.extra;
+  $("studentPinStatus").textContent=data.has_pin?(data.pin_locked?"PIN 등록됨 · 인증 시도 잠김 (15분 대기 또는 재발급)":"PIN 등록 완료"):"PIN 미발급 · 발급 전에는 대여·반납할 수 없습니다.";
+  $("studentPinOutput").classList.add("hide");
+  $("studentPinOutput").textContent="";
+  $("hideStudentPin").classList.add("hide");
   const undone=new Set(data.penalties.filter(x=>x.reverses_id!==null).map(x=>x.reverses_id));
   $("studentPenalties").innerHTML=data.penalties.map(p=>
    '<tr><td>'+esc(new Date(p.created_at).toLocaleString("ko-KR"))+'</td><td>'+esc(POLICY_CODES[p.code]||p.code)+'</td><td>'+esc(p.umbrella_id||"—")+'</td><td>'+((p.points>0)?"+":"")+p.points+'</td><td>'+esc(p.actor)+'</td><td>'+esc(p.reason)+'</td><td>'+
@@ -375,6 +391,25 @@ async function loadPolicyStudent(id){
   policyMessage("studentPolicyMessage",id+" 학생 정보를 불러왔습니다.");
  }catch(e){policyMessage("studentPolicyMessage","학생 조회 실패: "+e.message,true);}
 }
+$("issueStudentPin").onclick=async()=>{
+ if(!selectedPolicyStudent)return policyMessage("studentPolicyMessage","학생을 먼저 조회해 주세요.",true);
+ if(!$("studentPinVerified").checked)return policyMessage("studentPolicyMessage","학생 신원 확인을 체크해 주세요.",true);
+ if(!confirm(selectedPolicyStudent+" 학생의 PIN을 새로 발급할까요?\n이전에 발급한 PIN은 즉시 사용할 수 없게 됩니다."))return;
+ const button=$("issueStudentPin");button.disabled=true;
+ try{
+  const response=await api("/api/admin/student-pin",{method:"POST",auth:true,body:{student_id:selectedPolicyStudent,verified_identity:true}});
+  $("studentPinOutput").textContent=response.student_id+" · 새 PIN: "+response.pin;
+  $("studentPinOutput").classList.remove("hide");
+  $("hideStudentPin").classList.remove("hide");
+  $("studentPinVerified").checked=false;
+  $("studentPinStatus").textContent="PIN 등록 완료 · 학생에게 비공개로 전달해 주세요.";
+  policyMessage("studentPolicyMessage","학생 PIN을 발급했습니다. 공유 화면에서는 PIN을 즉시 숨겨 주세요.");
+ }catch(e){policyMessage("studentPolicyMessage","PIN 발급 실패: "+e.message,true);}
+ finally{button.disabled=false;}
+};
+$("hideStudentPin").onclick=()=>{
+ $("studentPinOutput").textContent="";$("studentPinOutput").classList.add("hide");$("hideStudentPin").classList.add("hide");
+};
 $("saveAllowance").onclick=async()=>{
  if(!selectedPolicyStudent)return;
  const extra=Number($("extraAllowance").value);
