@@ -449,7 +449,7 @@ class StaffActiveRequest(BaseModel):
 class StaffBorrowRequest(BaseModel):
     staff_id: str = Field(min_length=3,max_length=20)
     umbrella_id: str
-    pin: str = Field(min_length=6,max_length=6,pattern=r"^\\d{6}$")
+    pin: str = Field(min_length=6,max_length=6,pattern=r"^\d{6}$")
 
 
 def validate_staff_id(value: str) -> str:
@@ -909,6 +909,12 @@ def reverse_penalty(penalty_id: int,data: ReversePenaltyRequest,request: Request
 @app.get("/", include_in_schema=False)
 def home():
     return FileResponse(ROOT / "kiosk.html", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/staff", include_in_schema=False)
+@app.get("/staff/", include_in_schema=False)
+def staff_page():
+    return FileResponse(ROOT / "staff.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/admin", include_in_schema=False)
@@ -1386,10 +1392,17 @@ def export(request: Request):
         stocktake_sessions = c.execute("SELECT * FROM stocktake_sessions ORDER BY id").fetchall()
         stocktake_items = c.execute("SELECT * FROM stocktake_items ORDER BY session_id,umbrella_id").fetchall()
         umbrella_locations = c.execute("SELECT * FROM umbrella_locations ORDER BY umbrella_id").fetchall()
+        staff_accounts = c.execute(
+            """SELECT staff_id,display_name,active,created_at,updated_at,updated_by
+               FROM staff_accounts ORDER BY staff_id"""
+        ).fetchall()
+        staff_account_events = c.execute(
+            "SELECT * FROM staff_account_events ORDER BY id"
+        ).fetchall()
         rental_terms=c.execute("SELECT * FROM rental_terms ORDER BY borrowed_at").fetchall()
         rental_extensions=c.execute("SELECT * FROM rental_extensions ORDER BY id").fetchall()
     payload = {
-        "schema_version":"3.3",
+        "schema_version":"3.4",
         "exported_at":now(),
         "umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],
         "events":[dict(e) for e in events],
@@ -1400,7 +1413,9 @@ def export(request: Request):
         "stocktake_sessions":[dict(sess) for sess in stocktake_sessions],
         "stocktake_items":[dict(item) for item in stocktake_items],
         "rental_terms":[dict(r) for r in rental_terms],
-        "rental_extensions":[dict(x) for x in rental_extensions]
+        "rental_extensions":[dict(x) for x in rental_extensions],
+        "staff_accounts":[dict(row) for row in staff_accounts],
+        "staff_account_events":[dict(row) for row in staff_account_events]
     }
     return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="umbrella-backup.json"', "Cache-Control":"no-store"})
