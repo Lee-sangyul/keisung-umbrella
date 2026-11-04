@@ -81,6 +81,26 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 .qr-icon{display:flex;align-items:center;justify-content:center;width:clamp(62px,6.8vw,112px);height:clamp(62px,6.8vw,112px);font-size:0;color:#ff6541;flex:none}
 .qr-icon .ui-icon{width:100%;height:100%}
 @media(max-width:550px){.choice .symbol{width:65px;height:65px}.qr-icon{width:75px;height:75px}}
+
+/* v0.7 — expand sparse options to fill the touchscreen naturally */
+.tiles{--tile-columns:6;max-width:100%;width:100%;min-height:0;align-content:center;justify-content:center;grid-template-columns:repeat(6,minmax(0,1fr));gap:clamp(9px,1.4vw,21px);padding:8px clamp(4px,1vw,16px) 14px}
+.tiles[data-mode="grade"]{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(120px,clamp(120px,18vh,195px)));max-width:min(100%,1120px);align-content:center}
+.tiles[data-mode="class"]{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(135px,clamp(135px,20vh,225px)));max-width:min(100%,970px);align-content:center}
+.tiles[data-mode="number"]{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(6,minmax(52px,clamp(52px,7.2vh,82px)));max-width:min(100%,1220px);gap:clamp(6px,.9vw,14px);align-content:center}
+.tile{height:100%;min-height:0;border-radius:clamp(15px,1.45vw,26px);font-size:clamp(26px,2.5vw,43px);transition:background-color .12s,transform .12s}
+.tiles[data-mode="grade"] .tile,.tiles[data-mode="class"] .tile{font-size:clamp(37px,4.2vw,69px);border-width:3px;box-shadow:0 7px 18px #9f564014}
+.tiles[data-mode="number"] .tile{font-size:clamp(22px,2.2vw,34px)}
+@media(max-width:1050px){
+ .tiles[data-mode="grade"]{grid-template-columns:repeat(3,minmax(0,1fr));grid-template-rows:repeat(2,minmax(100px,15vh))}
+ .tiles[data-mode="class"]{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(110px,17vh))}
+ .tiles[data-mode="number"]{grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(6,minmax(51px,7vh));gap:8px}
+}
+@media(max-width:700px){
+ .tiles[data-mode="grade"]{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(3,minmax(92px,12vh));max-height:none}
+ .tiles[data-mode="class"]{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(105px,15vh));max-height:none}
+ .tiles[data-mode="number"]{grid-template-columns:repeat(4,minmax(0,1fr));grid-template-rows:repeat(9,minmax(53px,7vh));max-height:52vh;overflow-y:auto;align-content:start}
+ .tiles[data-mode="grade"] .tile,.tiles[data-mode="class"] .tile{font-size:clamp(35px,8vw,54px)}
+}
 </style></head>
 <body>
 <div class="shell">
@@ -135,7 +155,7 @@ function renderTiles(){
  const vals=[grade,klass,number],active=part;
  $("seg").innerHTML=names.map((s,i)=>'<button data-part="'+i+'" class="'+(i===part?"selected":"")+'">'+s+(vals[i]?" "+vals[i]:"")+'</button>').join("");
  for(const b of $("seg").children)b.onclick=()=>{part=Number(b.dataset.part);renderTiles();};
- $("tiles").style.setProperty("--tile-columns",active===2?"8":"6");
+ $("tiles").dataset.mode=["grade","class","number"][active];
  $("tiles").innerHTML="";
  for(let i=1;i<=limits[active];i++){const b=document.createElement("button");b.className="tile"+(vals[active]===i?" selected":"");b.textContent=i;b.onclick=()=>{if(active===0)grade=i;if(active===1)klass=i;if(active===2)number=i;if(active<2){part=active+1;}renderTiles();};$("tiles").append(b);}
  $("next").textContent="다음 단계 →";$("next").disabled=!(grade&&klass&&number);
