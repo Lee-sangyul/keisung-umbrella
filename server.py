@@ -242,7 +242,25 @@ def month_usage(c,student):
     limit=c.execute("SELECT value FROM policies WHERE key='monthly_limit'").fetchone()[0]
     row=c.execute("SELECT extra FROM student_allowances WHERE student_id=? AND month=?",(student,month)).fetchone()
     extra=row["extra"] if row else 0
-    return {"month":month,"used":count,"limit":limit,"extra":extra,"remaining":max(0,limit+extra-count)}
+    # A penalty deducts that many borrowing opportunities in its issue month.
+    # Reversal restores the deduction, even when the correction is made later.
+    # Previous months' penalties are not re-applied every future month.
+    penalty=c.execute(
+        """SELECT COALESCE(SUM(p.points),0)
+           FROM penalty_actions p
+           WHERE p.student_id=? AND p.reverses_id IS NULL
+             AND p.created_at>=? AND p.created_at<?
+             AND NOT EXISTS (
+               SELECT 1 FROM penalty_actions reversal
+               WHERE reversal.reverses_id=p.id
+             )""",
+        (student,start,end)
+    ).fetchone()[0]
+    deducted=max(0,penalty)
+    effective_limit=max(0,limit+extra-deducted)
+    return {"month":month,"used":count,"limit":limit,"extra":extra,
+            "penalty_deduction":deducted,"effective_limit":effective_limit,
+            "remaining":max(0,effective_limit-count)}
 
 
 def validate_student(student):
@@ -394,7 +412,13 @@ def borrow(data: StudentRequest):
             raise HTTPException(409, "이미 대여 중인 우산이 있습니다.")
         usage=month_usage(c,student)
         if usage["remaining"]<=0:
-            raise HTTPException(409, f"이번 달 대여 한도({usage['limit']}회 + 추가 {usage['extra']}회)에 도달했습니다. 담당 선생님께 문의해 주세요.")
+            raise HTTPException(
+                409,
+                f"이번 달 대여 가능 횟수를 모두 사용했습니다. "
+                f"(기본 {usage['limit']}회 + 추가 {usage['extra']}회 "
+                f"- 이번 달 패널티 {usage['penalty_deduction']}회 = "
+                f"최대 {usage['effective_limit']}회) 담당 선생님께 문의해 주세요."
+            )
         rental = secrets.token_hex(16)
         c.execute("UPDATE umbrellas SET status='BORROWED',borrower=?,rental_id=? WHERE id=?",
                   (student, rental, u["id"]))
