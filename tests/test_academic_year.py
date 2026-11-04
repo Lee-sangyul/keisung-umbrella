@@ -284,7 +284,7 @@ def test_old_schema_import_preserves_pin_hash_and_history_snapshots(client):
         ).fetchone()
         old=conn.execute("SELECT * FROM student_pins WHERE student_id=?",(A,)).fetchone()
         umbrella=conn.execute("SELECT * FROM umbrellas WHERE id=1").fetchone()
-        event=conn.execute("SELECT student_uid,student_id FROM events").fetchone()
+        event=conn.execute("SELECT student_uid,student_id FROM events WHERE action='BORROW'").fetchone()
     assert cred["salt"]==old["salt"]==salt
     assert cred["pin_hash"]==old["pin_hash"]==digest
     assert umbrella["borrower_uid"]==uid
