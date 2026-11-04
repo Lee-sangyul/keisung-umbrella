@@ -49,6 +49,21 @@
 @media(max-width:700px){.student-fields{grid-template-columns:repeat(3,minmax(0,1fr))}.student-fields .btn{grid-column:1/-1}.student-lookup{padding:13px}}
 .nav .nav-print-link{display:flex;align-items:center;gap:12px;color:#686b7b;text-decoration:none;min-height:49px;padding:12px 15px;border-radius:12px;font-size:15px;font-weight:800}
 .nav .nav-print-link:hover{background:#fff0ea;color:#ef5d37}
+
+.policy-row,.allowance-row{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.policy-row .field,.allowance-row .field{width:min(300px,100%)}
+.policy-row .btn,.allowance-row .btn{min-height:45px}
+.student-policy-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:22px 0}
+.student-policy-card{background:#fff8f4;border:1px solid #ffe0d3;border-radius:14px;padding:17px;display:grid;gap:11px}
+.student-policy-card span{color:#83828b;font-size:13px;font-weight:750}
+.student-policy-card strong{font-size:clamp(20px,2vw,30px);font-weight:950;overflow-wrap:anywhere}
+.penalty-form{margin:26px 0;border-top:1px solid #ededf2;border-bottom:1px solid #ededf2;padding:20px 0}
+.penalty-form h3{margin:0 0 17px}.penalty-form textarea{font:inherit;width:100%;resize:vertical;padding:12px;border:1px solid #e3e4eb;border-radius:11px}
+.confirm-penalty{display:flex;gap:10px;align-items:flex-start;margin-top:15px;color:#565966;font-size:13px;font-weight:750}
+.confirm-penalty input{width:20px;height:20px;accent-color:#ff6541;flex:none}
+#studentPolicyDetail>h3{font-size:18px;margin:20px 0}
+@media(max-width:900px){.student-policy-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:450px){.student-policy-stats{gap:7px}.student-policy-card{padding:12px}.student-policy-card strong{font-size:20px}}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -64,6 +79,7 @@
       <button type="button" data-tab="dashboard" class="active"><span>▦</span> 대시보드</button>
       <button type="button" data-tab="inventory"><span>▤</span> 우산 관리</button>
       <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
+      <button type="button" data-tab="studentPolicy"><span>♧</span> 학생·패널티 관리</button>
       <a class="nav-print-link" href="/admin/print"><span>▦</span> QR 라벨 인쇄</a>
       <button type="button" data-tab="settings"><span>⚙</span> 관리 도구</button>
     </nav></div>
@@ -103,7 +119,53 @@
        <div class="tablewrap"><table><thead><tr><th>처리 시간</th><th>우산 ID</th><th>이벤트</th><th>학생</th><th>담당자</th><th>사유</th></tr></thead><tbody id="eventRows"></tbody></table></div>
       </section>
     </div>
-    <div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/admin/print">▦ QR 인쇄 센터</a><a class="btn" href="/" target="_blank" rel="noopener">↗ 학생용 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
+    <div id="studentPolicy" class="tab">
+ <section class="panel">
+  <div class="head"><div><h2 class="section-title">월별 대여 정책</h2><p class="subtext">매월 1일 00:00(한국 시간) 기준으로 사용 횟수를 새로 계산합니다.</p></div></div>
+  <div class="policy-row">
+   <div class="field"><label for="monthlyLimit">학생당 월 최대 대여 횟수</label><input class="input" id="monthlyLimit" type="number" min="1" max="100" value="10"></div>
+   <button type="button" class="btn primary" id="savePolicy">월별 제한 저장</button>
+  </div>
+  <p class="helper">기본 10회 · 정상 대여 성공 1건당 1회 계산 · 반납 시 복원되지 않습니다. 분실·파손 패널티 점수만으로 자동 대여 정지는 하지 않습니다.</p>
+  <div class="msg hide" id="policyMessage" role="status"></div>
+ </section>
+ <section class="panel">
+  <div class="head"><div><h2 class="section-title">학생별 대여 및 패널티</h2><p class="subtext">학년·반·번호를 조회한 뒤 담당 교사가 상황을 확인합니다.</p></div></div>
+  <div class="student-fields">
+   <div class="field"><label for="penaltyGrade">학년</label><select id="penaltyGrade"></select></div>
+   <div class="field"><label for="penaltyClass">반</label><select id="penaltyClass"></select></div>
+   <div class="field"><label for="penaltyNumber">번호</label><select id="penaltyNumber"></select></div>
+   <button class="btn primary" id="findPenaltyStudent" type="button">학생 조회</button>
+  </div>
+  <div id="studentPolicyDetail" class="hide">
+   <div class="student-policy-stats">
+    <div class="student-policy-card"><span>현재 대여</span><strong id="studentActiveUmbrella">-</strong></div>
+    <div class="student-policy-card"><span>이번 달 이용</span><strong id="studentMonthUsed">-</strong></div>
+    <div class="student-policy-card"><span>이번 달 남은 횟수</span><strong id="studentRemaining">-</strong></div>
+    <div class="student-policy-card"><span>누적 패널티</span><strong id="studentPenaltyPoints">-</strong></div>
+   </div>
+   <div class="allowance-row">
+    <div class="field"><label for="extraAllowance">이번 달 추가 대여 허용 횟수</label><input class="input" id="extraAllowance" type="number" min="0" max="100" value="0"></div>
+    <button class="btn" type="button" id="saveAllowance">추가 횟수 저장</button>
+   </div>
+   <p class="helper">예외 대여가 필요한 학생은 담당 교사 확인 후 이번 달에만 추가 횟수를 설정하세요.</p>
+   <div class="penalty-form">
+    <h3>패널티 기록 추가</h3>
+    <div class="formgrid">
+     <div class="field"><label for="penaltyCode">유형</label><select id="penaltyCode"><option value="LOST">분실 (+3점)</option><option value="ACCIDENTAL_DAMAGE">과실 파손 (+1점)</option><option value="INTENTIONAL_DAMAGE">고의 파손 (+5점)</option><option value="WARNING">경고 (0점)</option></select></div>
+     <div class="field"><label for="penaltyUmbrella">관련 우산 ID (선택)</label><select id="penaltyUmbrella"><option value="">미지정</option></select></div>
+     <div class="field wide"><label for="penaltyReason">확인 내용 및 처리 사유 (필수)</label><textarea id="penaltyReason" maxlength="500" rows="3" placeholder="사실관계, 확인한 교사 및 조치 사유 등을 입력"></textarea></div>
+    </div>
+    <label class="confirm-penalty"><input type="checkbox" id="penaltyConfirmed"> 담당 교사가 사실관계 및 학생 소명을 확인했습니다.</label>
+    <div class="actions"><button type="button" class="btn danger" id="addPenalty">패널티 기록 저장</button></div>
+    <p class="helper">학생의 잘못으로 확정되지 않은 파손에는 자동으로 점수를 부여하지 마세요. 분실 우산이 발견되면 아래에서 취소할 수 있습니다.</p>
+   </div>
+   <h3>패널티 이력 (취소 포함)</h3><div class="tablewrap"><table><thead><tr><th>날짜</th><th>유형</th><th>우산</th><th>점수</th><th>관리자</th><th>사유</th><th>처리</th></tr></thead><tbody id="studentPenalties"></tbody></table></div>
+  </div>
+  <div id="studentPolicyMessage" class="msg hide" role="status"></div>
+ </section>
+</div>
+<div id="settings" class="tab"><section class="panel"><h2 class="section-title">관리 도구</h2><p class="subtext">서비스 운영과 백업</p><div class="actions"><button class="btn primary" id="settingsExport">↓ 전체 JSON 백업</button><a class="btn" href="/admin/print">▦ QR 인쇄 센터</a><a class="btn" href="/" target="_blank" rel="noopener">↗ 학생용 키오스크</a></div><p class="helper">JSON 파일에는 학생 정보가 포함될 수 있습니다. 비공개 저장 위치에 보관하세요. 관리자 비밀번호는 서버의 .env 설정으로 관리합니다.</p></section></div>
     <p class="fixednote">KEISUNG UMBRELLA · 관리자 접근 전용 · 서버 데이터 기준</p>
   </main>
 </div>
@@ -113,7 +175,7 @@ const $=id=>document.getElementById(id);
 const N={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
 const A={REGISTER:"신규 등록",BORROW:"대여",RETURN:"반납",LOST:"분실 처리",DAMAGED:"파손 처리",DISPOSED:"폐기 처리",RESTORE:"복구"};
 const colors={AVAILABLE:"#31b17c",BORROWED:"#5287ee",LOST:"#ef6a74",DAMAGED:"#e6b44e",DISPOSED:"#a6aab4"};
-const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."]};
+const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."]};
 let csrf="",currentUser="",inventory=[],events=[],busy=false;
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function api(path,{method="GET",body,auth=false}={}){
@@ -158,9 +220,10 @@ function renderEvents(){
 async function refresh(){
  const [i,e]=await Promise.all([api("/api/admin/inventory"),api("/api/admin/events")]);
  inventory=i;events=e;renderStats();renderInventory();renderEvents();
+ $("penaltyUmbrella").innerHTML='<option value="">미지정</option>'+inventory.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.id)+' · '+N[x.status]+'</option>').join("");
 }
 async function authed(){
- try{const r=await api("/api/admin/me");csrf=r.csrf;currentUser=r.username;show(true);await refresh();}
+ try{const r=await api("/api/admin/me");csrf=r.csrf;currentUser=r.username;show(true);await refresh();await loadPolicy();}
  catch(err){if(err.message.includes("401")||err.message.includes("로그인"))show(false);else{show(false);$("loginMsg").textContent="관리자 데이터 조회 실패: "+err.message;$("loginMsg").classList.remove("hide");}}
 }
 $("loginForm").onsubmit=async ev=>{
@@ -220,5 +283,85 @@ async function exportJson(){
  catch(e){alert(e.message);}
 }
 $("download").onclick=exportJson;$("settingsExport").onclick=exportJson;
+
+const POLICY_CODES={LOST:"분실",ACCIDENTAL_DAMAGE:"과실 파손",INTENTIONAL_DAMAGE:"고의 파손",WARNING:"경고",REVERSAL:"패널티 취소"};
+let selectedPolicyStudent="",policyRecord=null;
+for(const [id,max,label] of [["penaltyGrade",6,"학년"],["penaltyClass",4,"반"],["penaltyNumber",36,"번"]]){
+ const el=$(id);el.add(new Option("선택",""));
+ for(let n=1;n<=max;n++)el.add(new Option(n+label,String(n)));
+}
+function policyMessage(target,msg,error=false){
+ const el=$(target);el.className="msg"+(error?" error":"");el.textContent=msg;
+}
+function policyStudentId(){
+ const vals=[$("penaltyGrade").value,$("penaltyClass").value,$("penaltyNumber").value];
+ return vals.every(Boolean)?vals.join("-"):"";
+}
+async function loadPolicy(){
+ try{const data=await api("/api/admin/policy");$("monthlyLimit").value=data.monthly_limit;}
+ catch(e){policyMessage("policyMessage","설정 조회 실패: "+e.message,true);}
+}
+$("savePolicy").onclick=async()=>{
+ const n=Number($("monthlyLimit").value);
+ if(!Number.isInteger(n)||n<1||n>100)return policyMessage("policyMessage","1~100회 사이로 입력해 주세요.",true);
+ if(!confirm("월별 기본 대여 제한을 "+n+"회로 변경할까요?"))return;
+ try{await api("/api/admin/policy",{method:"PUT",auth:true,body:{monthly_limit:n}});policyMessage("policyMessage","월별 제한을 "+n+"회로 저장했습니다.");if(selectedPolicyStudent)await loadPolicyStudent(selectedPolicyStudent);}
+ catch(e){policyMessage("policyMessage",e.message,true);}
+};
+$("findPenaltyStudent").onclick=async()=>{
+ const id=policyStudentId();
+ if(!id)return policyMessage("studentPolicyMessage","학년, 반, 번호를 모두 선택해 주세요.",true);
+ await loadPolicyStudent(id);
+};
+async function loadPolicyStudent(id){
+ try{
+  const data=await api("/api/admin/student-record?student_id="+encodeURIComponent(id));
+  selectedPolicyStudent=id;policyRecord=data;
+  $("studentPolicyDetail").classList.remove("hide");
+  $("studentActiveUmbrella").textContent=data.active_umbrella||"없음";
+  $("studentMonthUsed").textContent=data.usage.used+" / "+(data.usage.limit+data.usage.extra)+"회";
+  $("studentRemaining").textContent=data.usage.remaining+"회";
+  $("studentPenaltyPoints").textContent=data.penalty_points+"점";
+  $("extraAllowance").value=data.usage.extra;
+  const undone=new Set(data.penalties.filter(x=>x.reverses_id!==null).map(x=>x.reverses_id));
+  $("studentPenalties").innerHTML=data.penalties.map(p=>
+   '<tr><td>'+esc(new Date(p.created_at).toLocaleString("ko-KR"))+'</td><td>'+esc(POLICY_CODES[p.code]||p.code)+'</td><td>'+esc(p.umbrella_id||"—")+'</td><td>'+((p.points>0)?"+":"")+p.points+'</td><td>'+esc(p.actor)+'</td><td>'+esc(p.reason)+'</td><td>'+
+   (p.code!=="REVERSAL"&&!undone.has(p.id)?'<button class="btn" data-reverse="'+p.id+'">취소</button>':"—")+'</td></tr>').join("")||empty(7,"패널티 기록이 없습니다.");
+  for(const button of $("studentPenalties").querySelectorAll("[data-reverse]"))button.onclick=()=>reverseStudentPenalty(Number(button.dataset.reverse));
+  policyMessage("studentPolicyMessage",id+" 학생 정보를 불러왔습니다.");
+ }catch(e){policyMessage("studentPolicyMessage","학생 조회 실패: "+e.message,true);}
+}
+$("saveAllowance").onclick=async()=>{
+ if(!selectedPolicyStudent)return;
+ const extra=Number($("extraAllowance").value);
+ if(!Number.isInteger(extra)||extra<0||extra>100)return policyMessage("studentPolicyMessage","추가 횟수는 0~100회입니다.",true);
+ if(!confirm(selectedPolicyStudent+" 학생에게 이번 달 추가 "+extra+"회를 설정할까요?"))return;
+ try{await api("/api/admin/student-allowance",{method:"PUT",auth:true,body:{student_id:selectedPolicyStudent,extra}});
+ await loadPolicyStudent(selectedPolicyStudent);
+ policyMessage("studentPolicyMessage","추가 대여 허용 횟수를 저장했습니다.");}
+ catch(e){policyMessage("studentPolicyMessage",e.message,true);}
+};
+$("addPenalty").onclick=async()=>{
+ if(!selectedPolicyStudent)return policyMessage("studentPolicyMessage","학생을 먼저 조회해 주세요.",true);
+ const reason=$("penaltyReason").value.trim(),confirmed=$("penaltyConfirmed").checked;
+ if(reason.length<5)return policyMessage("studentPolicyMessage","상황 및 처리 사유를 5자 이상 입력해 주세요.",true);
+ if(!confirmed)return policyMessage("studentPolicyMessage","담당 교사의 사실관계 확인 체크가 필요합니다.",true);
+ if(!confirm(selectedPolicyStudent+" 학생에게 '"+POLICY_CODES[$("penaltyCode").value]+"' 기록을 추가할까요?"))return;
+ try{
+  await api("/api/admin/penalties",{method:"POST",auth:true,body:{student_id:selectedPolicyStudent,umbrella_id:$("penaltyUmbrella").value||null,code:$("penaltyCode").value,reason,confirmed}});
+  $("penaltyReason").value="";$("penaltyConfirmed").checked=false;
+  await loadPolicyStudent(selectedPolicyStudent);policyMessage("studentPolicyMessage","패널티 기록을 추가했습니다.");
+ }catch(e){policyMessage("studentPolicyMessage","기록 실패: "+e.message,true);}
+};
+async function reverseStudentPenalty(id){
+ const reason=prompt("패널티 취소 사유를 입력하세요 (5자 이상).\n취소 기록은 감사 이력에 남습니다.");
+ if(reason===null)return;
+ if(reason.trim().length<5)return policyMessage("studentPolicyMessage","취소 사유를 5자 이상 입력해 주세요.",true);
+ if(!confirm("패널티 #"+id+"을 취소하시겠습니까?"))return;
+ try{await api("/api/admin/penalties/"+id+"/reverse",{method:"POST",auth:true,body:{reason:reason.trim()}});
+ await loadPolicyStudent(selectedPolicyStudent);policyMessage("studentPolicyMessage","패널티를 취소하고 기록을 남겼습니다.");}
+ catch(e){policyMessage("studentPolicyMessage",e.message,true);}
+}
+
 authed();
 </script></body></html>
