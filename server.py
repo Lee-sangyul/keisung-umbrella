@@ -24,7 +24,7 @@ APP_ORIGIN = os.getenv("APP_ORIGIN", "").rstrip("/")
 SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
 app = FastAPI(title="Keisung Umbrella API", docs_url=None, redoc_url=None)
 STATES = {"AVAILABLE", "BORROWED", "LOST", "DAMAGED", "DISPOSED"}
-ID_RE = re.compile(r"^UMB-\\d{4,}$")
+ID_RE = re.compile(r"^UMB-\d{4,}$")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 if not ADMIN_USERNAME or len(ADMIN_PASSWORD) < 12:
