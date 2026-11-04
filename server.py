@@ -206,6 +206,12 @@ def admin_page():
     return FileResponse(ROOT / "index.html", headers={"Cache-Control": "no-store"})
 
 
+@app.get("/admin/print", include_in_schema=False)
+@app.get("/admin/print/", include_in_schema=False)
+def print_page():
+    return FileResponse(ROOT / "print.html", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/api/umbrellas")
 def umbrellas():
     with connect() as c:
