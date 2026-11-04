@@ -220,6 +220,10 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
+class BatchRegisterRequest(BaseModel):
+    count: int = Field(ge=1, le=500)
+
+
 class StatusRequest(BaseModel):
     status: str
     reason: str = Field(default="", max_length=160)
@@ -490,6 +494,25 @@ def register(request: Request):
         log(c, cur.lastrowid, "REGISTER", actor=actor)
         value = uid(cur.lastrowid)
     return {"ok": True, "id": value, "status": "AVAILABLE"}
+
+
+@app.post("/api/admin/umbrellas/batch")
+def register_batch(data: BatchRegisterRequest, request: Request):
+    """Register 1–500 umbrellas atomically with unique, never reused IDs."""
+    actor = require_admin(request, csrf=True)
+    registered = []
+    with transaction() as c:
+        for _ in range(data.count):
+            cur = c.execute("INSERT INTO umbrellas(status) VALUES('AVAILABLE')")
+            log(c, cur.lastrowid, "REGISTER", actor=actor, reason="일괄 등록")
+            registered.append(uid(cur.lastrowid))
+    return {
+        "ok": True,
+        "count": len(registered),
+        "ids": registered,
+        "first_id": registered[0],
+        "last_id": registered[-1],
+    }
 
 
 @app.patch("/api/admin/umbrellas/{umbrella_id}")
