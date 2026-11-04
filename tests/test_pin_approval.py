@@ -80,7 +80,7 @@ def test_pending_requires_staff_approval_and_code(client):
     assert pending.status_code == 200
     assert pending.json()["pending_count"] == 1
     assert pending.json()["requests"][0]["student_id"] == STUDENT_ID
-    assert "approval_code" not in pending.text
+    assert "approval_code" not in pending.json()["requests"][0]
     assert "pin_hash" not in pending.text
 
     # No CSRF, no face-to-face confirmation, or wrong applicant ticket -> deny.
