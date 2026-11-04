@@ -1,10 +1,10 @@
-# ☂️ Keisung Umbrella — Server MVP v0.3
+# ☂️ Keisung Umbrella — Server MVP v0.4
 
 학교 공용 우산 대여·반납 관리 프로젝트. FastAPI + SQLite 서버 기반이며, **GitHub Pages 단독으로는 작동하지 않습니다.**
 
 ## 화면 구성
 
-- `/` — **16:9 키오스크/전자칠판용 학생 화면**, 전체 뷰포트 사용, 큰 QR 스캔·선택·대여·반납 버튼
+- `/` — **16:9 터치 키오스크**, 대여/반납 선택 → 학년·반·번호 숫자 타일 선택 → QR 스캔/ID 입력 → 최종 확인 → 완료 (테이블링의 현장 등록식 단계형 UX 참고)
 - `/admin` — 별도 관리자 로그인 및 관리 화면
 - `/api/...` — 서버에서 기록 검증·저장
 
@@ -41,13 +41,13 @@ uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 
 Codespaces Ports에서 **8000 포트를 Private**으로 유지하고 Forwarded Address를 열어보세요. 메인 주소는 학생 키오스크, `/admin`은 관리자 로그인 화면입니다.
 
-**주의:** 예전에 같은 셸에서 `export ADMIN_USERNAME`, `export ADMIN_PASSWORD`, `export APP_ORIGIN`을 사용했다면 환경변수가 `.env`보다 우선합니다. 새 Codespaces 터미널을 열거나 아래를 실행하세요.
+**v0.4 변경:** `python-dotenv`가 `.env` 값을 기존 셸 `export` 값보다 우선 적용합니다. 아래 명령은 이전 설정을 정리하고 싶을 때만 선택적으로 실행하세요.
 
 ```bash
 unset ADMIN_USERNAME ADMIN_PASSWORD APP_ORIGIN SECURE_COOKIES DATA_DIR
 ```
 
-그다음 서버를 재시작하면 `.env` 값이 적용됩니다. v0.3부터 시작 시 `.env` 관리자 계정 정보가 SQLite 관리자 계정에 반영되고 이전 세션은 만료됩니다.
+이제 서버 재시작 시 `.env` 관리자 계정 정보가 SQLite에 반영되고 이전 세션은 만료됩니다. `ADMIN_PASSWORD`는 **실제 비밀번호**여야 하고 `CHANGE_ME` 예시값은 사용할 수 없습니다. 서버 재시작 후 `/admin`에 `.env`의 `ADMIN_USERNAME` 및 `ADMIN_PASSWORD`와 정확히 같은 값을 입력하세요.
 
 ### HTTP 401/403에 관하여
 
@@ -85,3 +85,15 @@ Dockerfile
 - 외부 서버는 HTTPS 필수, `SECURE_COOKIES=true` 사용. `DATA_DIR`는 영구 저장 볼륨이어야 합니다.
 - `.env`, SQLite DB, JSON 백업을 공개 GitHub에 업로드하지 마세요.
 - 기존 브라우저 `localStorage` v0.1 기록은 서버로 자동 마이그레이션하지 않습니다.
+
+## 로그인 401 오류 해결 순서
+
+1. `git pull`, `pip install -r requirements.txt` 실행
+2. `.env`를 열어 `ADMIN_USERNAME`, `ADMIN_PASSWORD`를 실제 값으로 수정 (예시 `CHANGE_ME...` 사용 금지)
+3. Uvicorn을 완전히 종료(Ctrl+C)한 뒤 다시 시작
+4. Codespaces의 **Ports** 탭에서 포트 8000의 HTTPS 주소 접속 → `/admin`
+5. 로그인 필드에 `.env`의 값과 **완전히 같은** ID/비밀번호 입력. 앞뒤 공백이나 기존에 브라우저가 저장한 암호 자동완성 확인
+
+`/api/admin/me` 요청의 로그인 전 401은 정상이고, `POST /api/admin/login`의 401은 계정/비밀번호 불일치입니다. 로그인 요청에서 403이면 `APP_ORIGIN`과 Codespaces 접속 URL을 확인하세요.
+
+**보안:** Codespaces 포트는 Private으로 유지하고 비밀번호, `.env`, DB를 공유하거나 커밋하지 마세요. 학생 본인 인증이 없어 실사용 전 인증 보완이 필요합니다.
