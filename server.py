@@ -951,6 +951,7 @@ def borrow(data: StudentRequest):
     rejection = None
     usage = None
     with transaction() as c:
+        stable_id=academic.resolve_student(c,student)
         authentication = check_student_pin(c, student, data.pin)
         if authentication != "ok":
             rejection = authentication
@@ -960,7 +961,7 @@ def borrow(data: StudentRequest):
                 raise HTTPException(404, "등록된 우산이 아닙니다.")
             if u["status"] != "AVAILABLE":
                 raise HTTPException(409, "이 우산은 대여할 수 없습니다.")
-            if c.execute("SELECT 1 FROM umbrellas WHERE borrower=?", (student,)).fetchone():
+            if c.execute("SELECT 1 FROM umbrellas WHERE borrower_uid=?", (stable_id,)).fetchone():
                 raise HTTPException(409, "이미 대여 중인 우산이 있습니다.")
             usage = month_usage(c,student)
             if usage["remaining"]<=0:
@@ -975,15 +976,15 @@ def borrow(data: StudentRequest):
             borrowed_at=now()
             rental_days=c.execute("SELECT value FROM policies WHERE key='rental_days'").fetchone()[0]
             due_at=utc_due_in_days(rental_days,datetime.fromisoformat(borrowed_at))
-            c.execute("UPDATE umbrellas SET status='BORROWED',borrower=?,rental_id=? WHERE id=?",
-                      (student, rental, u["id"]))
+            c.execute("""UPDATE umbrellas SET status='BORROWED',borrower=?,borrower_uid=?,rental_id=?
+                         WHERE id=?""",(student,stable_id,rental,u["id"]))
             c.execute(
                 """INSERT INTO rental_terms
-                   (rental_id,umbrella_id,student_id,borrowed_at,due_at,issued_by)
-                   VALUES(?,?,?,?,?,'self-service')""",
-                (rental,u["id"],student,borrowed_at,due_at)
+                   (rental_id,umbrella_id,student_id,borrowed_at,due_at,issued_by,student_uid)
+                   VALUES(?,?,?,?,?,'self-service',?)""",
+                (rental,u["id"],student,borrowed_at,due_at,stable_id)
             )
-            log(c, u["id"], "BORROW", student, rental, actor="self-service")
+            log(c, u["id"], "BORROW", student, rental, actor="self-service",student_uid=stable_id)
     student_pin_error(rejection or "ok")
     return {"ok": True, "id": data.umbrella_id, "status": "BORROWED",
             "remaining":usage["remaining"]-1,"due_at":due_at}
@@ -994,6 +995,7 @@ def return_umbrella(data: StudentRequest):
     student = f"{data.grade}-{data.classroom}-{data.number}"
     rejection = None
     with transaction() as c:
+        stable_id=academic.resolve_student(c,student)
         authentication = check_student_pin(c, student, data.pin)
         if authentication != "ok":
             rejection = authentication
@@ -1001,12 +1003,12 @@ def return_umbrella(data: StudentRequest):
             u = c.execute("SELECT * FROM umbrellas WHERE id=?", (parse_id(data.umbrella_id),)).fetchone()
             if not u or u["status"] != "BORROWED":
                 raise HTTPException(409, "현재 대여 중인 우산이 아닙니다.")
-            if u["borrower"] != student:
+            if not stable_id or u["borrower_uid"]!=stable_id:
                 raise HTTPException(403, "등록된 대여자 정보와 다릅니다.")
-            log(c, u["id"], "RETURN", student, u["rental_id"], actor="self-service")
+            log(c, u["id"], "RETURN", student, u["rental_id"], actor="self-service",student_uid=stable_id)
             c.execute("UPDATE rental_terms SET returned_at=? WHERE rental_id=? AND returned_at IS NULL",
                       (now(),u["rental_id"]))
-            c.execute("UPDATE umbrellas SET status='AVAILABLE',borrower=NULL,rental_id=NULL WHERE id=?", (u["id"],))
+            c.execute("UPDATE umbrellas SET status='AVAILABLE',borrower=NULL,borrower_uid=NULL,rental_id=NULL WHERE id=?", (u["id"],))
     student_pin_error(rejection or "ok")
     return {"ok": True, "id": data.umbrella_id, "status": "AVAILABLE"}
 
