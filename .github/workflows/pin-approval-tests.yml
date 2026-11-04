@@ -1,4 +1,4 @@
-name: PIN approval regression tests
+name: Keisung Umbrella regression tests
 
 on:
   push:
@@ -23,6 +23,6 @@ jobs:
           pip install -r requirements.txt
           pip install pytest httpx
       - name: Check Python syntax
-        run: python -m compileall -q server.py tests/test_pin_approval.py
-      - name: PIN approval and checkout regression tests
-        run: pytest -q tests/test_pin_approval.py
+        run: python -m compileall -q server.py tests/test_pin_approval.py tests/test_stocktake.py
+      - name: PIN approval, stocktake and checkout regression tests
+        run: pytest -q tests/test_pin_approval.py tests/test_stocktake.py
