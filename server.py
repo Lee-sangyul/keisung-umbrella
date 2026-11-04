@@ -821,7 +821,12 @@ class ReversePenaltyRequest(BaseModel):
 
 
 def penalty_total(c,student):
-    return c.execute("SELECT COALESCE(SUM(points),0) FROM penalty_actions WHERE student_id=?",(student,)).fetchone()[0]
+    return penalty_total_uid(c,academic.resolve_student(c,student))
+
+
+def penalty_total_uid(c,stable_id):
+    return c.execute("SELECT COALESCE(SUM(points),0) FROM penalty_actions WHERE student_uid=?",
+                     (stable_id,)).fetchone()[0]
 
 
 @app.get("/api/admin/policy")
@@ -844,17 +849,19 @@ def student_record(student_id: str,request: Request):
     require_admin(request)
     student=validate_student(student_id)
     with connect() as c:
+        stable_id=academic.resolve_student(c,student)
         usage=month_usage(c,student)
-        pin_status=c.execute("SELECT locked_until,updated_at FROM student_pins WHERE student_id=?",(student,)).fetchone()
+        pin_status=c.execute("SELECT locked_until,updated_at FROM student_credentials WHERE student_uid=?",
+                             (stable_id,)).fetchone()
         umbrella=c.execute(
             """SELECT u.id,u.status,t.due_at FROM umbrellas u
                LEFT JOIN rental_terms t ON t.rental_id=u.rental_id
-               WHERE u.borrower=?""",(student,)
+               WHERE u.borrower_uid=?""",(stable_id,)
         ).fetchone()
         penalties=c.execute("""SELECT id,student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id
-          FROM penalty_actions WHERE student_id=? ORDER BY id DESC LIMIT 200""",(student,)).fetchall()
-        total=penalty_total(c,student)
-    return {"student_id":student,"usage":usage,"has_pin":bool(pin_status),
+          FROM penalty_actions WHERE student_uid=? ORDER BY id DESC LIMIT 200""",(stable_id,)).fetchall()
+        total=penalty_total_uid(c,stable_id)
+    return {"student_id":student,"student_uid":stable_id,"usage":usage,"has_pin":bool(pin_status),
         "pin_locked":bool(pin_status and pin_status["locked_until"]>int(time.time())),
         "active_umbrella":uid(umbrella["id"]) if umbrella else None,
         "active_due_at":umbrella["due_at"] if umbrella else None,
@@ -869,10 +876,12 @@ def set_allowance(data: AllowanceRequest,request: Request):
     student=validate_student(data.student_id)
     month,_,_=korean_month_window()
     with transaction() as c:
-        c.execute("""INSERT INTO student_allowances(student_id,month,extra,updated_by,updated_at)
-          VALUES(?,?,?,?,?) ON CONFLICT(student_id,month) DO UPDATE SET extra=excluded.extra,
-          updated_by=excluded.updated_by,updated_at=excluded.updated_at""",
-          (student,month,data.extra,actor,now()))
+        stable_id=academic.resolve_student(c,student,create=True,timestamp=now(),actor=actor)
+        c.execute("""INSERT INTO student_allowances(student_id,month,extra,updated_by,updated_at,student_uid)
+          VALUES(?,?,?,?,?,?) ON CONFLICT(student_id,month) DO UPDATE SET extra=excluded.extra,
+          updated_by=excluded.updated_by,updated_at=excluded.updated_at,
+          student_uid=excluded.student_uid""",
+          (student,month,data.extra,actor,now(),stable_id))
         usage=month_usage(c,student)
     return {"ok":True,"usage":usage}
 
@@ -887,13 +896,14 @@ def add_penalty(data: PenaltyRequest,request: Request):
         raise HTTPException(422,"지원하지 않는 패널티 유형입니다.")
     umbrella_num=parse_id(data.umbrella_id) if data.umbrella_id else None
     with transaction() as c:
+        stable_id=academic.resolve_student(c,student,create=True,timestamp=now(),actor=actor)
         if umbrella_num is not None and not c.execute("SELECT 1 FROM umbrellas WHERE id=?",(umbrella_num,)).fetchone():
             raise HTTPException(404,"등록되지 않은 우산입니다.")
         cur=c.execute("""INSERT INTO penalty_actions
-          (student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id)
-          VALUES(?,?,?,?,?,?,?,NULL)""",
-          (student,umbrella_num,data.code,PENALTY_POINTS[data.code],data.reason,actor,now()))
-        total=penalty_total(c,student)
+          (student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id,student_uid)
+          VALUES(?,?,?,?,?,?,?,NULL,?)""",
+          (student,umbrella_num,data.code,PENALTY_POINTS[data.code],data.reason,actor,now(),stable_id))
+        total=penalty_total_uid(c,stable_id)
     return {"ok":True,"id":cur.lastrowid,"penalty_points":total}
 
 
@@ -907,10 +917,10 @@ def reverse_penalty(penalty_id: int,data: ReversePenaltyRequest,request: Request
         if c.execute("SELECT 1 FROM penalty_actions WHERE reverses_id=?",(penalty_id,)).fetchone():
             raise HTTPException(409,"이미 취소된 패널티입니다.")
         c.execute("""INSERT INTO penalty_actions
-          (student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id)
-          VALUES(?,?,?,?,?,?,?,?)""",
-          (row["student_id"],row["umbrella_id"],"REVERSAL",-row["points"],data.reason,actor,now(),penalty_id))
-        total=penalty_total(c,row["student_id"])
+          (student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id,student_uid)
+          VALUES(?,?,?,?,?,?,?,?,?)""",
+          (row["student_id"],row["umbrella_id"],"REVERSAL",-row["points"],data.reason,actor,now(),penalty_id,row["student_uid"]))
+        total=penalty_total_uid(c,row["student_uid"])
     return {"ok":True,"penalty_points":total}
 
 
