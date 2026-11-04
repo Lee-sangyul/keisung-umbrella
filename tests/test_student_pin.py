@@ -115,7 +115,7 @@ def test_old_pending_and_rejected_approvals_no_longer_block_existing_pin(client)
     import secrets
     users=[("6-4-16","PENDING"),("5-2-14","REJECTED")]
     with server.transaction() as conn:
-        conn.executescript("""
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS student_pin_approvals (
                 student_id TEXT PRIMARY KEY,
                 status TEXT NOT NULL,
