@@ -96,18 +96,30 @@ const click=async(id)=>{assert.equal(typeof $(id).onclick,"function","Clickable 
 
 (async()=>{
  assert.equal(run("role"),null,"first screen starts with no role");
- assert.ok(!$("roleChooser").classList.contains("hidden"));
- assert.ok($("actionChooser").classList.contains("hidden"));
+ assert.equal(run("choosingRole"),false);
+ assert.ok($("roleChooser").classList.contains("hidden"),"role selection must come second");
+ assert.ok(!$("actionChooser").classList.contains("hidden"),"first screen displays borrowing/returning");
+ assert.match($("welcomeTitle").textContent,/우산이 필요하신가요/);
  assert.ok($("back").classList.contains("hidden"));
 
- // Staff: role -> borrow -> staff ID -> shared QR -> shared PIN -> confirmation
- await click("chooseStaff");
- assert.equal(run("role"),"staff");
- assert.ok($("roleChooser").classList.contains("hidden"));
+ // Stage 1: choose action, then stage 2: choose student/staff.
+ await click("startBorrow");
+ assert.equal(run("mode"),"borrow");
+ assert.equal(run("choosingRole"),true);
+ assert.ok(!$("roleChooser").classList.contains("hidden"));
+ assert.ok($("actionChooser").classList.contains("hidden"));
+ assert.ok(!$("back").classList.contains("hidden"));
+ assert.match($("welcomeTitle").textContent,/학생인가요, 교직원인가요/);
+ // Back from role selection returns to borrow/return options.
+ await click("back");
+ assert.equal(run("choosingRole"),false);
  assert.ok(!$("actionChooser").classList.contains("hidden"));
  await click("startBorrow");
+ await click("chooseStaff");
+ assert.equal(run("role"),"staff");
  assert.equal(run("step"),6);
- assert.ok(!$("next").disabled===false||$("next").disabled);
+ assert.ok($("roleChooser").classList.contains("hidden"));
+ assert.ok($("next").disabled,"staff ID must be entered before continuing");
  $("staffId").value="TEACH01";
  $("staffId").listeners.input();
  assert.ok(!$("next").disabled);
@@ -129,10 +141,11 @@ const click=async(id)=>{assert.equal(typeof $(id).onclick,"function","Clickable 
  assert.ok($("doneMessage").textContent.includes("반납 예정:"));
  await click("back");
  assert.equal(run("role"),null);
- assert.ok(!$("roleChooser").classList.contains("hidden"));
+ assert.equal(run("choosingRole"),false);
+ assert.ok(!$("actionChooser").classList.contains("hidden"),"completed flow goes to first action screen");
 
  // Student: same kiosk, existing ID/PIN flow is preserved
- await click("chooseStudent");await click("startBorrow");
+ await click("startBorrow");await click("chooseStudent");
  assert.equal(run("step"),1);
  run("grade=6;klass=4;number=16;");
  await click("next");
@@ -149,7 +162,10 @@ const click=async(id)=>{assert.equal(typeof $(id).onclick,"function","Clickable 
  await click("back");
 
  // Staff return uses the same review page and staff API, not a new URL
- await click("chooseStaff");await click("startReturn");
+ await click("startReturn");
+ assert.equal(run("mode"),"return");
+ assert.ok(!$("roleChooser").classList.contains("hidden"));
+ await click("chooseStaff");
  $("staffId").value="TEACH01";$("staffId").listeners.input();await click("next");
  $("umbrella").value="UMB-0001";$("umbrella").listeners.input();await click("next");
  $("studentPin").value="123456";await click("next");
@@ -158,7 +174,7 @@ const click=async(id)=>{assert.equal(typeof $(id).onclick,"function","Clickable 
  await click("back");
 
  // First-time student still can create a PIN inside the unified kiosk
- await click("chooseStudent");await click("startBorrow");
+ await click("startBorrow");await click("chooseStudent");
  run("grade=6;klass=4;number=17;");
  await click("next");
  assert.equal(run("step"),2,"unregistered student sees first PIN registration");
@@ -167,5 +183,5 @@ const click=async(id)=>{assert.equal(typeof $(id).onclick,"function","Clickable 
  assert.equal(run("step"),3,"student registration is immediately usable");
  assert.ok(requests.some(r=>r.url==="/api/student-pin/enroll"&&r.body.number===17));
 
- console.log("Unified kiosk UI checks passed: role selection, staff/student borrow, staff return, student first PIN.");
+ console.log("Unified kiosk UI checks passed: action-first flow, role choice, back navigation, staff/student borrow, staff return, student first PIN.");
 })().catch(error=>{console.error(error);process.exitCode=1;});
