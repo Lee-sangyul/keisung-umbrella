@@ -338,3 +338,46 @@ def test_academic_endpoints_require_admin_and_csrf(client):
     assert apply(client,current,year,entries,p.json()["preview_token"]).status_code==200
     # A second transition into the same year must not reapply or mutate the roster.
     assert apply(client,current,year,entries,p.json()["preview_token"]).status_code==409
+
+
+def test_existing_active_loans_survive_overlapping_old_and_new_class_labels(client):
+    """A former homeroom label can become another student's new homeroom safely."""
+    auth=login(client)
+    enroll(client,A,PIN_A)  # A: 5-2-14 -> 6-1-7
+    enroll(client,C,PIN_C)  # C: 4-1-10 -> 5-2-14 (A's old homeroom)
+    assert post(client,"/api/admin/umbrellas/batch",{"count":3},auth).status_code==200
+    for label,pin,umb in [(A,PIN_A,"UMB-0001"),(C,PIN_C,"UMB-0002")]:
+        assert post(client,"/api/borrow",{
+            **parts(label),"pin":pin,"umbrella_id":umb
+        }).status_code==200
+
+    data,rows=make_plan(client,{A:"6-1-7",C:A})
+    p=preview(client,auth,data["next_year"],rows)
+    assert p.status_code==200,p.text
+    assert not p.json()["errors"]
+    done=apply(client,auth,data["next_year"],rows,p.json()["preview_token"])
+    assert done.status_code==200,done.text
+    current={i["id"]:i["borrower"] for i in client.get("/api/admin/inventory").json()}
+    assert current["UMB-0001"]=="6-1-7"
+    assert current["UMB-0002"]==A
+
+    # A NEW student can claim the vacated old ID while both original loans remain active.
+    new_pin="915286"
+    enroll(client,C,new_pin)
+    result=post(client,"/api/borrow",{
+        **parts(C),"pin":new_pin,"umbrella_id":"UMB-0003"
+    })
+    assert result.status_code==200,result.text
+    ids=client.get("/api/admin/rentals").json()["rentals"]
+    assert len(ids)==3
+    assert {r["student_id"] for r in ids}=={"6-1-7",A,C}
+
+    # All three students can return their own umbrellas using their original PINs.
+    for label,pin,umb in [("6-1-7",PIN_A,"UMB-0001"),
+                          (A,PIN_C,"UMB-0002"),
+                          (C,new_pin,"UMB-0003")]:
+        result=post(client,"/api/return",{
+            **parts(label),"pin":pin,"umbrella_id":umb
+        })
+        assert result.status_code==200,result.text
+    assert client.get("/api/admin/rentals").json()["total"]==0
