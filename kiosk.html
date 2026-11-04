@@ -136,21 +136,42 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 #doneMessage{white-space:pre-line;max-width:950px}
 #pinSetupMessage{color:#7a6869;font-weight:700;font-size:clamp(12px,1.05vw,15px);line-height:1.4;margin:0}
 @media(max-width:550px){.pin-setup-fields{grid-template-columns:1fr;gap:8px}.pin-setup-card{gap:8px}.pin-setup-fields input{height:42px}}
+.role-choice .symbol{font-size:clamp(54px,5.4vw,92px);line-height:1.1}
+.staff-id-card{background:white;border:2px solid #f0e1d9;border-radius:25px;padding:clamp(23px,4vw,50px);margin-top:clamp(23px,5vh,55px);width:min(100%,760px)}
+.staff-id-card label{display:block;text-align:left;font-size:clamp(18px,1.8vw,28px);font-weight:900;margin-bottom:12px}
+.staff-id-card input{width:100%;height:clamp(68px,8.5vh,95px);padding:0 23px;font-size:clamp(24px,2.4vw,37px);font-weight:850;letter-spacing:.07em;border:2px solid #ebdbd2;border-radius:18px;text-transform:uppercase}
+.staff-id-card p{font-size:clamp(14px,1.15vw,19px);color:#81757a;line-height:1.5;text-align:left}
+@media(max-width:700px){.role-choice .choice{min-height:210px}.staff-id-card{padding:18px}}
 </style></head>
 <body>
 <div class="shell">
  <header class="header">
  <div class="brand"><div class="mark" aria-hidden="true"><img src="/assets/keisung-icon-64.png" alt="" width="64" height="64"></div><span>계성 우산</span></div>
- <div class="header-aside"><span class="stock" id="stock">대여 가능 확인 중</span><a class="admin" href="/staff">교직원용 →</a></div>
+ <div class="header-aside"><span class="stock" id="stock">대여 가능 확인 중</span></div>
  </header>
  <main>
   <section class="page active" id="welcome"><div class="center">
-   <p class="eyebrow">KEISUNG UMBRELLA</p><h1>우산이 필요하신가요?</h1><p class="sub">버튼을 눌러 대여 또는 반납을 시작해 주세요.</p>
-   <div class="choice-grid"><button class="choice borrow" id="startBorrow"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M9 30C12 17 21 10 32 10s20 7 23 20c-5-3-10-3-15 0-5-3-11-3-16 0-5-3-10-3-15 0Z" stroke="currentColor" stroke-width="3.8" stroke-linejoin="round"/><path d="M32 30v19c0 5 3 8 7 8s7-3 7-7" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/><path d="M32 5v5" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></svg></span><strong>우산 빌리기</strong><small>QR 인식 후 간편 대여</small></button><button class="choice return" id="startReturn"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M22 16 10 28l12 12M11 28h24c11 0 18 7 18 17 0 8-5 14-13 14H27" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><strong>우산 반납하기</strong><small>빌린 우산을 돌려주세요</small></button></div>
+    <p class="eyebrow">KEISUNG UMBRELLA</p>
+    <h1 id="welcomeTitle">학생인가요, 교직원인가요?</h1>
+    <p class="sub" id="welcomeHint">이용자 유형을 선택해 주세요.</p>
+    <div class="choice-grid role-choice" id="roleChooser">
+      <button class="choice borrow" type="button" id="chooseStudent"><span class="symbol" aria-hidden="true">🎒</span><strong>학생</strong><small>학년 · 반 · 번호와 학생 PIN</small></button>
+      <button class="choice return" type="button" id="chooseStaff"><span class="symbol" aria-hidden="true">👩‍🏫</span><strong>교직원</strong><small>교직원 ID와 전용 PIN</small></button>
+    </div>
+    <div class="choice-grid hidden" id="actionChooser"><button class="choice borrow" id="startBorrow"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M9 30C12 17 21 10 32 10s20 7 23 20c-5-3-10-3-15 0-5-3-11-3-16 0-5-3-10-3-15 0Z" stroke="currentColor" stroke-width="3.8" stroke-linejoin="round"/><path d="M32 30v19c0 5 3 8 7 8s7-3 7-7" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/><path d="M32 5v5" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></svg></span><strong>우산 빌리기</strong><small>QR 인식 후 간편 대여</small></button><button class="choice return" id="startReturn"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M22 16 10 28l12 12M11 28h24c11 0 18 7 18 17 0 8-5 14-13 14H27" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><strong>우산 반납하기</strong><small>빌린 우산을 돌려주세요</small></button></div>
   </div></section>
   <section class="page" id="student"><div class="progress"><span class="current"></span><span></span><span></span></div>
    <h2 class="step-title">학생 정보를 선택해 주세요</h2><p class="step-sub">학년 · 반 · 번호를 순서대로 눌러 주세요.</p>
    <div class="selection-wrap"><div class="seg" id="seg"></div><div class="tiles" id="tiles"></div></div>
+  </section>
+  <section class="page" id="staffIdentification"><div class="progress"><span class="current"></span><span></span><span></span></div>
+    <div class="center"><p class="eyebrow">교직원용</p><h1>교직원 ID를 입력해 주세요</h1>
+      <p class="sub">담당 관리자로부터 발급받은 교직원 ID를 입력해 주세요.</p>
+      <div class="staff-id-card"><label for="staffId">교직원 ID</label>
+        <input id="staffId" placeholder="예: TEACH01" maxlength="20" minlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="교직원 ID">
+        <p>PIN은 우산 QR 또는 번호를 확인한 뒤 마지막 단계에서 입력합니다.</p>
+      </div>
+    </div>
   </section>
   <section class="page" id="pinSetup">
     <div class="progress"><span class="current"></span><span class="current"></span><span></span></div>
@@ -175,10 +196,10 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
    <div class="center"><div class="qr-area"><div class="scanbox"><span class="qr-icon"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M9 23V12a3 3 0 0 1 3-3h11M41 9h11a3 3 0 0 1 3 3v11M55 41v11a3 3 0 0 1-3 3H41M23 55H12a3 3 0 0 1-3-3V41" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><rect x="20" y="20" width="10" height="10" rx="2" stroke="currentColor" stroke-width="3"/><path d="M37 20h7v7h-7zM20 37h8v8h-8zM37 38v7h8M46 35h-4" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg></span><strong>QR 코드 스캔</strong><p>카메라로 우산 코드를 비춰 주세요.</p><button id="scan">QR 스캔 시작</button></div><div class="manualbox"><span class="qr-icon"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="7" y="16" width="50" height="32" rx="6" stroke="currentColor" stroke-width="3.5"/><path d="M17 26h3m8 0h3m8 0h3M17 34h3m8 0h3m8 0h3M22 42h20" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span><strong>직접 입력</strong><p>우산 스티커의 ID를 입력해 주세요.</p><input id="umbrella" placeholder="UMB-0001" maxlength="30" autocomplete="off" spellcheck="false" aria-label="우산 ID"></div></div></div>
   </section>
   <section class="page" id="review"><div class="progress"><span class="current"></span><span class="current"></span><span class="current"></span></div>
-   <div class="center"><p class="eyebrow">마지막 단계</p><h1>정보가 맞는지 확인해 주세요</h1><p class="sub">다른 학생의 정보를 입력하면 안 돼요.</p>
-   <div class="review-card"><div class="review-row"><span>이용 방법</span><strong id="vAction">대여</strong></div><div class="review-row"><span>학생</span><strong id="vStudent">-</strong></div><div class="review-row"><span>우산</span><strong id="vUmbrella">-</strong></div></div>
-   <div class="pin-panel"><label for="studentPin">학생 PIN (숫자 6자리)</label><p>직접 설정한 PIN 또는 담당 선생님에게 발급받은 PIN을 입력해 주세요. 다른 사람에게 알려주면 안 돼요.</p>
-   <input id="studentPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" autocapitalize="off" placeholder="••••••" aria-label="학생 PIN 6자리">
+   <div class="center"><p class="eyebrow">마지막 단계</p><h1>정보가 맞는지 확인해 주세요</h1><p class="sub" id="reviewHint">자신의 정보가 맞는지 확인해 주세요.</p>
+   <div class="review-card"><div class="review-row"><span>이용 방법</span><strong id="vAction">대여</strong></div><div class="review-row"><span id="vRoleLabel">학생</span><strong id="vStudent">-</strong></div><div class="review-row"><span>우산</span><strong id="vUmbrella">-</strong></div></div>
+   <div class="pin-panel"><label for="studentPin" id="reviewPinLabel">학생 PIN (숫자 6자리)</label><p id="reviewPinHelp">PIN은 다른 사람에게 알려주면 안 돼요.</p>
+   <input id="studentPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" autocapitalize="off" placeholder="••••••" aria-label="대여자 PIN 6자리">
    <div class="pin-keypad" id="pinKeypad" aria-label="PIN 숫자 키패드"></div></div></div>
   </section>
   <section class="page" id="done"><div class="center"><div class="done-icon" id="doneIcon">✅</div><h1 id="doneTitle">완료되었습니다!</h1><p class="sub" id="doneMessage">이용해 주셔서 감사합니다.</p></div></section>
