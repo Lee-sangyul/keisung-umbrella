@@ -911,7 +911,7 @@ class StocktakeScanBatch(BaseModel):
 
 def clean_location(value: str,allow_all: bool=False) -> str:
     location=value.strip()
-    if not location or len(location)>50 or any(ch in location for ch in "\\r\\n\\t"):
+    if not location or len(location)>50 or any(ord(ch)<32 for ch in location):
         raise HTTPException(422,"보관 위치를 1~50자로 입력해 주세요.")
     if location == "ALL" and not allow_all:
         raise HTTPException(422,"ALL은 학교 전체 실사 전용으로 예약된 위치명입니다.")
@@ -1105,9 +1105,9 @@ def export_stocktake_csv(session_id: int,request: Request):
             loc="'"+loc
         writer.writerow([uid(item["umbrella_id"]),audit_result,item["snapshot_status"],
                          item["current_status"],loc,item["seen_at"] or ""])
-    return Response("\\ufeff"+out.getvalue(),media_type="text/csv; charset=utf-8",
+    return Response(chr(65279)+out.getvalue(),media_type="text/csv; charset=utf-8",
                     headers={"Cache-Control":"no-store",
-                             "Content-Disposition":f'attachment; filename="stocktake-{summary["id"]}.csv"'})
+                             "Content-Disposition":f'attachment; filename="stocktake-{session_id}.csv"'})
 
 
 @app.get("/api/admin/inventory")
