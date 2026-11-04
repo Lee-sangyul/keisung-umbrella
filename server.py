@@ -218,7 +218,6 @@ def init_db():
     with transaction() as c:
         c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('monthly_limit',10)")
         c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('rental_days',7)")
-        academic.init_identity(c,datetime.now(timezone.utc).isoformat())
         # Give existing active rentals a fresh grace period from first upgrade:
         # old loans never had a promised due date, so avoid retroactive overdue.
         migration_time = datetime.now(timezone.utc)
@@ -235,6 +234,9 @@ def init_db():
                WHERE u.status='BORROWED' AND u.rental_id IS NOT NULL AND u.borrower IS NOT NULL""",
             (migration_time.isoformat(),grace_due)
         )
+        # Migrate after legacy rental backfill so all historical loans acquire
+        # permanent student UIDs on the first start (not only on restart).
+        academic.init_identity(c,datetime.now(timezone.utc).isoformat())
         salt = secrets.token_bytes(16)
         # .env is the source of truth for the single bootstrap admin.
         # Updating it must also update an account that was already created in SQLite.
