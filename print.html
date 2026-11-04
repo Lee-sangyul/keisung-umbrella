@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#ff6541"><title>계성 우산 | QR 라벨 인쇄 센터</title>
+<link rel="icon" href="/assets/keisung-icon-64.png">
+<style>
+:root{font-family:system-ui,"Malgun Gothic",sans-serif;color:#252735;background:#f7f8fb}
+*{box-sizing:border-box}body{margin:0}button,input,select{font:inherit}button{cursor:pointer}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #ff6541;outline-offset:2px}
+main{max-width:1290px;margin:auto;padding:24px}.top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:22px}
+.brand{display:flex;align-items:center;gap:13px;font-size:23px;font-weight:900}.brand img{width:49px;height:49px;border-radius:13px}
+a{color:#b64f30}.top a{font-size:14px;font-weight:750;text-decoration:none}
+h1{font-size:clamp(27px,3vw,40px);letter-spacing:-.04em;margin:0 0 9px}h2{font-size:20px;letter-spacing:-.03em;margin:0 0 12px}
+.note{font-size:13px;color:#818593;line-height:1.6;margin:0 0 17px}
+.layout{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:18px;align-items:start}
+.card{background:white;border:1px solid #e8eaf0;border-radius:18px;padding:22px;margin-bottom:18px;box-shadow:0 4px 20px #00000008}
+.controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.field{display:grid;gap:7px}.field label{font-size:13px;color:#656876;font-weight:850}
+select,input[type=text]{width:100%;min-height:45px;border:1px solid #dce0e8;border-radius:10px;padding:10px 12px;background:white;color:#333}
+.btn{border:1px solid #e1e3e9;border-radius:10px;background:white;padding:10px 14px;font-weight:800;font-size:14px;min-height:43px}
+.btn.primary{background:#ff6541;border-color:#ff6541;color:white}.btn:hover{filter:brightness(.97)}
+.buttons{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:16px 0}.buttons .btn{flex:0 0 auto}
+.checkboxes{display:grid;gap:12px;margin:18px 0}.checkboxes label{font-weight:650;font-size:14px;display:flex;align-items:center;gap:9px}
+input[type=checkbox]{width:18px;height:18px;accent-color:#ff6541}
+.items{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;max-height:560px;overflow:auto}
+.item{border:1px solid #e7e8ee;border-radius:12px;background:#fff;padding:12px;display:flex;align-items:center;gap:8px;cursor:pointer}
+.item:has(input:checked){background:#fff2eb;border-color:#ffb39f}.item b{font-size:13px;display:block}.item small{font-size:11px;color:#858995}
+.row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.count{font-weight:850;color:#e75c36;font-size:14px}.msg{background:#ebf7ef;color:#276a46;padding:13px;border-radius:11px;font-size:13px;line-height:1.5}
+.msg.error{background:#fff0f0;color:#b43e48}
+.preview{border:1px dashed #e3c8ba;border-radius:12px;margin-top:14px;padding:14px;background:#fffaf7;text-align:center}
+.preview img{width:92px;height:92px;image-rendering:pixelated}
+.preview strong{display:block;letter-spacing:.03em;font-size:15px}
+.mini{font-size:12px;color:#777e8e;line-height:1.6}.hidden{display:none!important}
+@media(max-width:930px){.layout{grid-template-columns:1fr}.items{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:560px){main{padding:14px}.card{padding:17px}.items{grid-template-columns:repeat(2,minmax(0,1fr))}.controls{gap:10px}}
+</style></head>
+<body><main>
+<header class="top"><div class="brand"><img src="/assets/keisung-icon-64.png" alt="">계성 우산 · QR 인쇄</div><a href="/admin">← 관리자 대시보드로</a></header>
+<h1>QR 라벨 인쇄 센터</h1><p class="note">관리자 전용 · 우산 하나 또는 여러 개의 QR 라벨을 만들어 프린터로 출력할 수 있어요. QR 데이터에는 우산 ID만 저장됩니다.</p>
+<div id="authMessage" class="msg hidden"></div>
+<div id="content" class="layout hidden">
+ <div>
+  <section class="card"><h2>인쇄할 우산 선택</h2>
+  <div class="row"><div class="field" style="flex:1;min-width:180px"><label for="search">우산 ID 검색</label><input type="text" id="search" placeholder="UMB-0001" autocomplete="off"></div>
+  <div class="field" style="flex:0 1 185px"><label for="status">상태</label><select id="status"><option value="">전체</option><option value="AVAILABLE">대여 가능</option><option value="BORROWED">대여 중</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option></select></div></div>
+  <div class="buttons"><button type="button" class="btn" id="selectAll">검색 결과 전체 선택</button><button type="button" class="btn" id="selectNone">선택 해제</button><button type="button" class="btn" id="selectAvailable">대여 가능만 선택</button></div>
+  <p id="count" class="count" aria-live="polite">선택 0개</p><div id="items" class="items"></div></section>
+ </div>
+ <aside>
+  <section class="card"><h2>프린트 설정</h2><div class="controls">
+   <div class="field"><label for="paper">용지</label><select id="paper"><option value="A4">A4</option><option value="letter">Letter</option></select></div>
+   <div class="field"><label for="orientation">방향</label><select id="orientation"><option value="portrait">세로</option><option value="landscape">가로</option></select></div>
+   <div class="field"><label for="cols">열</label><select id="cols"><option value="1">1열</option><option value="2">2열</option><option value="3" selected>3열</option><option value="4">4열</option></select></div>
+   <div class="field"><label for="rows">행</label><select id="rows"><option value="2">2행</option><option value="3">3행</option><option value="4">4행</option><option value="5">5행</option><option value="6" selected>6행</option><option value="7">7행</option><option value="8">8행</option></select></div>
+   <div class="field"><label for="qr">QR 크기</label><select id="qr"><option value="20">20 mm</option><option value="25">25 mm</option><option value="30" selected>30 mm</option><option value="35">35 mm</option><option value="40">40 mm</option><option value="45">45 mm</option><option value="50">50 mm</option></select></div>
+   <div class="field"><label for="margin">여백</label><select id="margin"><option value="5">5 mm</option><option value="10" selected>10 mm</option><option value="15">15 mm</option><option value="20">20 mm</option></select></div>
+  </div>
+  <div class="checkboxes"><label><input type="checkbox" id="showId" checked> 우산 ID 표시</label><label><input type="checkbox" id="showTitle" checked> '계성 우산' 제목 표시</label><label><input type="checkbox" id="borders"> 라벨 절취선 표시</label></div>
+  <div class="preview"><div style="font-size:43px;color:#f36d4d">▦</div><strong>계성 우산</strong><span class="mini">UMB-0001</span></div>
+  <p id="layoutSummary" class="mini"></p><button class="btn primary" id="print" style="width:100%;min-height:56px">선택한 QR 인쇄하기</button>
+  <p class="mini">인쇄 미리보기 창에서 ‘인쇄 시작’을 누르세요. 프린터 배율은 100%로 설정하고 최초에는 시험 출력 후 스캔을 확인하세요.</p><div id="printMsg" class="msg hidden" role="status"></div>
+  </section>
+ </aside>
+</div>
+</main>
+<script>
+"use strict";
+const $=id=>document.getElementById(id),statusName={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
+let csrf="",inventory=[],selected=new Set();
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function msg(text,error=false){$("printMsg").textContent=text;$("printMsg").className="msg"+(error?" error":"");}
+async function api(path,opts={}){
+ const headers={"Content-Type":"application/json"};if(opts.method==="POST")headers["X-CSRF-Token"]=csrf;
+ const r=await fetch(path,{method:opts.method||"GET",headers,body:opts.body?JSON.stringify(opts.body):undefined,credentials:"same-origin",cache:"no-store"});
+ const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(typeof d.detail==="string"?d.detail:"HTTP "+r.status);return d;
+}
+function visible(){const q=$("search").value.trim().toUpperCase(),s=$("status").value;return inventory.filter(x=>(!s||x.status===s)&&(!q||x.id.includes(q)));}
+function render(){
+ const ids=new Set(inventory.map(x=>x.id));for(const id of selected)if(!ids.has(id))selected.delete(id);
+ $("items").replaceChildren();
+ for(const x of visible()){
+  const label=document.createElement("label");label.className="item";
+  const check=document.createElement("input");check.type="checkbox";check.checked=selected.has(x.id);
+  check.onchange=()=>{if(check.checked)selected.add(x.id);else selected.delete(x.id);updateCount();};
+  const desc=document.createElement("span"),title=document.createElement("b"),sub=document.createElement("small");
+  title.textContent=x.id;sub.textContent=statusName[x.status];desc.append(title,sub);label.append(check,desc);$("items").append(label);
+ }
+ updateCount();
+}
+function updateCount(){$("count").textContent="선택 "+selected.size+"개 · 검색 결과 "+visible().length+"개";}
+$("search").oninput=render;$("status").onchange=render;
+$("selectAll").onclick=()=>{visible().forEach(x=>selected.add(x.id));render();};
+$("selectNone").onclick=()=>{selected.clear();render();};
+$("selectAvailable").onclick=()=>{selected.clear();inventory.filter(x=>x.status==="AVAILABLE").forEach(x=>selected.add(x.id));render();};
+const settingIds=["paper","orientation","cols","rows","qr","margin","showId","showTitle","borders"];
+function settings(){return{paper:$("paper").value,orient:$("orientation").value,cols:Number($("cols").value),rows:Number($("rows").value),qr:Number($("qr").value),margin:Number($("margin").value),showId:$("showId").checked,showTitle:$("showTitle").checked,borders:$("borders").checked};}
+function sizes(s){const w=s.paper==="A4"?210:215.9,h=s.paper==="A4"?297:279.4;return s.orient==="portrait"?[w,h]:[h,w];}
+function summary(){const s=settings(),[w,h]=sizes(s),cw=(w-s.margin*2)/s.cols,ch=(h-s.margin*2)/s.rows;
+ $("layoutSummary").textContent="1페이지 "+s.cols*s.rows+"개 · "+s.paper+" "+(s.orient==="portrait"?"세로":"가로")+
+ ((s.qr+9>Math.min(cw,ch))?" · ⚠ QR 크기가 셀에 비해 큽니다. 크기나 행/열 수를 줄여 주세요.":"");
+}
+settingIds.forEach(id=>$(id).addEventListener("change",summary));
+function printHtml(labels,s){
+ const [w,h]=sizes(s),per=s.cols*s.rows,inner=[];
+ for(let i=0;i<labels.length;i+=per){
+  const cells=labels.slice(i,i+per).map(item=>'<article class="label"><div class="qr">'+item.svg+'</div>'+
+    (s.showTitle?'<div class="title">계성 우산</div>':"")+(s.showId?'<div class="id">'+esc(item.id)+'</div>':"")+'</article>').join("");
+  inner.push('<section class="sheet">'+cells+'</section>');
+ }
+ const css='@page{size:'+s.paper+' '+s.orient+';margin:0}'+
+ '*{box-sizing:border-box}html,body{margin:0;padding:0;font-family:Arial,"Malgun Gothic",sans-serif;background:#eee}'+
+ '.tools{background:white;position:sticky;top:0;z-index:2;display:flex;align-items:center;gap:15px;padding:16px;box-shadow:0 2px 10px #0002}'+
+ '.tools button{background:#ff6541;color:white;border:0;padding:11px 20px;border-radius:10px;font-weight:bold;font-size:16px;cursor:pointer}'+
+ '.sheet{width:'+w+'mm;height:'+h+'mm;background:#fff;padding:'+s.margin+'mm;margin:15px auto;display:grid;grid-template-columns:repeat('+s.cols+',minmax(0,1fr));grid-template-rows:repeat('+s.rows+',minmax(0,1fr));break-after:page;page-break-after:always;overflow:hidden}'+
+ '.sheet:last-of-type{break-after:auto;page-break-after:auto}'+
+ '.label{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1mm;padding:1mm;min-width:0;min-height:0;overflow:hidden;border:'+(s.borders?"1px dashed #aaa":"1px solid transparent")+'}'+
+ '.qr{width:min(100%,'+s.qr+'mm);height:min(100%,'+s.qr+'mm);display:flex;align-items:center;justify-content:center;min-height:0;min-width:0}'+
+ '.qr svg{display:block;width:100%;height:100%}.title{font-weight:bold;font-size:10pt;line-height:1.1}.id{font-weight:900;font-size:11pt;line-height:1.1;letter-spacing:.04em}'+
+ '@media print{html,body{background:white}.tools{display:none!important}.sheet{margin:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}}';
+ return '<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>계성 우산 QR 인쇄</title><style>'+css+'</style></head><body>'+
+ '<div class="tools"><button onclick="window.print()">인쇄 시작</button><span>'+labels.length+'개 QR · '+s.cols+'열 × '+s.rows+'행 · 배율 100% 권장</span></div>'+
+ inner.join("")+'</body></html>';
+}
+async function printLabels(ids){
+ if(!ids.length)return msg("인쇄할 우산을 선택해 주세요.",true);
+ if(ids.length>200)return msg("한 번에 최대 200개까지 인쇄할 수 있습니다.",true);
+ const win=window.open("","_blank");
+ if(!win)return msg("팝업 차단을 해제해 주세요.",true);
+ win.document.write('<!doctype html><html lang="ko"><meta charset="utf-8"><body style="font-family:sans-serif;padding:2rem">QR 생성 중…</body></html>');
+ try{
+  const data=await api("/api/admin/qr-labels",{method:"POST",body:{umbrella_ids:ids}});
+  if(win.closed)return;
+  win.document.open();win.document.write(printHtml(data.labels,settings()));win.document.close();win.focus();
+  msg("QR "+data.labels.length+"개의 인쇄 미리보기를 열었습니다. 새 창에서 ‘인쇄 시작’을 눌러 주세요.");
+ }catch(e){if(!win.closed)win.close();msg("QR 생성 실패: "+e.message,true);}
+}
+$("print").onclick=()=>printLabels([...selected].sort((a,b)=>Number(a.slice(4))-Number(b.slice(4))));
+async function init(){
+ try{
+  const me=await api("/api/admin/me");csrf=me.csrf;
+  inventory=await api("/api/admin/inventory");
+  const requested=new URLSearchParams(location.search).get("umbrella");
+  if(requested&&inventory.some(x=>x.id===requested))selected.add(requested);
+  else inventory.filter(x=>x.status==="AVAILABLE").forEach(x=>selected.add(x.id));
+  $("content").classList.remove("hidden");render();summary();
+ }catch(e){
+  $("authMessage").classList.remove("hidden");
+  $("authMessage").textContent="관리자 인증 또는 데이터 조회가 필요합니다. "+e.message+" — /admin에서 로그인 후 다시 접속해 주세요.";
+ }
+}
+init();
+</script></body></html>
