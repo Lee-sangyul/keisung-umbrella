@@ -140,6 +140,26 @@ def init_db():
         );
         CREATE INDEX IF NOT EXISTS stocktake_item_session_idx
             ON stocktake_items(session_id,expected,seen_at);
+        CREATE TABLE IF NOT EXISTS rental_terms (
+            rental_id TEXT PRIMARY KEY,
+            umbrella_id INTEGER NOT NULL REFERENCES umbrellas(id),
+            student_id TEXT NOT NULL,
+            borrowed_at TEXT NOT NULL,
+            due_at TEXT NOT NULL,
+            returned_at TEXT,
+            issued_by TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS rental_terms_due_idx
+            ON rental_terms(returned_at,due_at);
+        CREATE TABLE IF NOT EXISTS rental_extensions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            rental_id TEXT NOT NULL REFERENCES rental_terms(rental_id),
+            previous_due_at TEXT NOT NULL,
+            due_at TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            actor TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
         CREATE TABLE IF NOT EXISTS policies (
             key TEXT PRIMARY KEY,
             value INTEGER NOT NULL
@@ -172,6 +192,23 @@ def init_db():
         c.close()
     with transaction() as c:
         c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('monthly_limit',10)")
+        c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('rental_days',7)")
+        # Give existing active rentals a fresh grace period from first upgrade:
+        # old loans never had a promised due date, so avoid retroactive overdue.
+        migration_time = datetime.now(timezone.utc)
+        grace_due = (migration_time + timedelta(days=7)).isoformat()
+        c.execute(
+            """INSERT OR IGNORE INTO rental_terms
+                 (rental_id,umbrella_id,student_id,borrowed_at,due_at,issued_by)
+               SELECT u.rental_id,u.id,u.borrower,
+                 COALESCE((SELECT e.created_at FROM events e
+                           WHERE e.rental_id=u.rental_id AND e.action='BORROW'
+                           ORDER BY e.seq DESC LIMIT 1),?),
+                 ?,'migration'
+               FROM umbrellas u
+               WHERE u.status='BORROWED' AND u.rental_id IS NOT NULL AND u.borrower IS NOT NULL""",
+            (migration_time.isoformat(),grace_due)
+        )
         salt = secrets.token_bytes(16)
         # .env is the source of truth for the single bootstrap admin.
         # Updating it must also update an account that was already created in SQLite.
@@ -443,6 +480,90 @@ def enroll_student_pin(data: StudentPinEnrollRequest, request: Request):
 
 
 
+class RentalPolicyRequest(BaseModel):
+    rental_days: int = Field(ge=1,le=30)
+
+
+class RentalExtendRequest(BaseModel):
+    extra_days: int = Field(ge=1,le=30)
+    reason: str = Field(min_length=5,max_length=500)
+
+
+def utc_due_in_days(days: int,base: datetime | None = None) -> str:
+    return ((base or datetime.now(timezone.utc)) + timedelta(days=days)).isoformat()
+
+
+def rental_is_overdue(due_at: str) -> bool:
+    return datetime.fromisoformat(due_at) < datetime.now(timezone.utc)
+
+
+@app.get("/api/admin/rental-policy")
+def get_rental_policy(request: Request):
+    require_admin(request)
+    with connect() as c:
+        days=c.execute("SELECT value FROM policies WHERE key='rental_days'").fetchone()[0]
+    return {"rental_days":days}
+
+
+@app.put("/api/admin/rental-policy")
+def update_rental_policy(data: RentalPolicyRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    with transaction() as c:
+        c.execute("UPDATE policies SET value=? WHERE key='rental_days'",(data.rental_days,))
+    return {"ok":True,"rental_days":data.rental_days,"updated_by":actor}
+
+
+@app.get("/api/admin/rentals")
+def list_active_rentals(request: Request):
+    """Private due-date and overdue dashboard; never returned by public APIs."""
+    require_admin(request)
+    with connect() as c:
+        rows=c.execute(
+            """SELECT u.id AS umbrella_id,u.borrower,t.rental_id,t.borrowed_at,t.due_at
+               FROM umbrellas u
+               JOIN rental_terms t ON t.rental_id=u.rental_id
+               WHERE u.status='BORROWED' AND t.returned_at IS NULL
+               ORDER BY t.due_at ASC,u.id ASC"""
+        ).fetchall()
+    rentals=[{"umbrella_id":uid(r["umbrella_id"]),"student_id":r["borrower"],
+              "rental_id":r["rental_id"],"borrowed_at":r["borrowed_at"],
+              "due_at":r["due_at"],"overdue":rental_is_overdue(r["due_at"])}
+             for r in rows]
+    return {"total":len(rentals),"overdue_count":sum(r["overdue"] for r in rentals),
+            "rentals":rentals}
+
+
+@app.post("/api/admin/rentals/{rental_id}/extend")
+def extend_active_rental(rental_id: str,data: RentalExtendRequest,request: Request):
+    actor=require_admin(request,csrf=True)
+    if not re.fullmatch(r"[0-9a-f]{32}",rental_id):
+        raise HTTPException(422,"대여 식별자가 올바르지 않습니다.")
+    reason=data.reason.strip()
+    if len(reason)<5:
+        raise HTTPException(422,"연장 사유를 5자 이상 작성해 주세요.")
+    with transaction() as c:
+        row=c.execute(
+            """SELECT t.due_at FROM rental_terms t JOIN umbrellas u
+               ON u.rental_id=t.rental_id
+               WHERE t.rental_id=? AND t.returned_at IS NULL AND u.status='BORROWED'""",
+            (rental_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(409,"현재 대여 중인 우산이 아니거나 이미 반납됐습니다.")
+        previous_due_at=row["due_at"]
+        base=max(datetime.now(timezone.utc),datetime.fromisoformat(previous_due_at))
+        due_at=utc_due_in_days(data.extra_days,base)
+        c.execute("UPDATE rental_terms SET due_at=? WHERE rental_id=?",
+                  (due_at,rental_id))
+        c.execute(
+            """INSERT INTO rental_extensions(rental_id,previous_due_at,due_at,reason,actor,created_at)
+               VALUES(?,?,?,?,?,?)""",
+            (rental_id,previous_due_at,due_at,reason,actor,now())
+        )
+    return {"ok":True,"rental_id":rental_id,"previous_due_at":previous_due_at,
+            "due_at":due_at,"extended_days":data.extra_days}
+
+
 class PolicyRequest(BaseModel):
     monthly_limit: int = Field(ge=1,le=100)
 
@@ -490,13 +611,19 @@ def student_record(student_id: str,request: Request):
     with connect() as c:
         usage=month_usage(c,student)
         pin_status=c.execute("SELECT locked_until,updated_at FROM student_pins WHERE student_id=?",(student,)).fetchone()
-        umbrella=c.execute("SELECT id,status FROM umbrellas WHERE borrower=?",(student,)).fetchone()
+        umbrella=c.execute(
+            """SELECT u.id,u.status,t.due_at FROM umbrellas u
+               LEFT JOIN rental_terms t ON t.rental_id=u.rental_id
+               WHERE u.borrower=?""",(student,)
+        ).fetchone()
         penalties=c.execute("""SELECT id,student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id
           FROM penalty_actions WHERE student_id=? ORDER BY id DESC LIMIT 200""",(student,)).fetchall()
         total=penalty_total(c,student)
     return {"student_id":student,"usage":usage,"has_pin":bool(pin_status),
         "pin_locked":bool(pin_status and pin_status["locked_until"]>int(time.time())),
         "active_umbrella":uid(umbrella["id"]) if umbrella else None,
+        "active_due_at":umbrella["due_at"] if umbrella else None,
+        "active_overdue":bool(umbrella and umbrella["due_at"] and rental_is_overdue(umbrella["due_at"])),
         "penalty_points":total,
         "penalties":[{**dict(p),"umbrella_id":uid(p["umbrella_id"]) if p["umbrella_id"] else None} for p in penalties]}
 
@@ -603,11 +730,21 @@ def borrow(data: StudentRequest):
                     f"최대 {usage['effective_limit']}회) 담당 선생님께 문의해 주세요."
                 )
             rental = secrets.token_hex(16)
+            borrowed_at=now()
+            rental_days=c.execute("SELECT value FROM policies WHERE key='rental_days'").fetchone()[0]
+            due_at=utc_due_in_days(rental_days,datetime.fromisoformat(borrowed_at))
             c.execute("UPDATE umbrellas SET status='BORROWED',borrower=?,rental_id=? WHERE id=?",
                       (student, rental, u["id"]))
+            c.execute(
+                """INSERT INTO rental_terms
+                   (rental_id,umbrella_id,student_id,borrowed_at,due_at,issued_by)
+                   VALUES(?,?,?,?,?,'self-service')""",
+                (rental,u["id"],student,borrowed_at,due_at)
+            )
             log(c, u["id"], "BORROW", student, rental, actor="self-service")
     student_pin_error(rejection or "ok")
-    return {"ok": True, "id": data.umbrella_id, "status": "BORROWED", "remaining":usage["remaining"]-1}
+    return {"ok": True, "id": data.umbrella_id, "status": "BORROWED",
+            "remaining":usage["remaining"]-1,"due_at":due_at}
 
 
 @app.post("/api/return")
@@ -625,6 +762,8 @@ def return_umbrella(data: StudentRequest):
             if u["borrower"] != student:
                 raise HTTPException(403, "등록된 대여자 정보와 다릅니다.")
             log(c, u["id"], "RETURN", student, u["rental_id"], actor="self-service")
+            c.execute("UPDATE rental_terms SET returned_at=? WHERE rental_id=? AND returned_at IS NULL",
+                      (now(),u["rental_id"]))
             c.execute("UPDATE umbrellas SET status='AVAILABLE',borrower=NULL,rental_id=NULL WHERE id=?", (u["id"],))
     student_pin_error(rejection or "ok")
     return {"ok": True, "id": data.umbrella_id, "status": "AVAILABLE"}
@@ -720,6 +859,9 @@ def change_state(umbrella_id: str, data: StatusRequest, request: Request):
             raise HTTPException(409, "분실 또는 파손 상태만 복구할 수 있습니다.")
         action = "RESTORE" if target == "AVAILABLE" else target
         log(c, u["id"], action, u["borrower"], u["rental_id"], actor, data.reason)
+        if u["rental_id"]:
+            c.execute("UPDATE rental_terms SET returned_at=? WHERE rental_id=? AND returned_at IS NULL",
+                      (now(),u["rental_id"]))
         c.execute("UPDATE umbrellas SET status=?,borrower=NULL,rental_id=NULL WHERE id=?", (target, u["id"]))
     return {"ok": True, "id": umbrella_id, "status": target}
 
@@ -1017,8 +1159,10 @@ def export(request: Request):
         stocktake_sessions = c.execute("SELECT * FROM stocktake_sessions ORDER BY id").fetchall()
         stocktake_items = c.execute("SELECT * FROM stocktake_items ORDER BY session_id,umbrella_id").fetchall()
         umbrella_locations = c.execute("SELECT * FROM umbrella_locations ORDER BY umbrella_id").fetchall()
+        rental_terms=c.execute("SELECT * FROM rental_terms ORDER BY borrowed_at").fetchall()
+        rental_extensions=c.execute("SELECT * FROM rental_extensions ORDER BY id").fetchall()
     payload = {
-        "schema_version":"3.2",
+        "schema_version":"3.3",
         "exported_at":now(),
         "umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],
         "events":[dict(e) for e in events],
@@ -1027,7 +1171,9 @@ def export(request: Request):
         "penalty_actions":[dict(p) for p in penalties],
         "umbrella_locations":[dict(loc) for loc in umbrella_locations],
         "stocktake_sessions":[dict(sess) for sess in stocktake_sessions],
-        "stocktake_items":[dict(item) for item in stocktake_items]
+        "stocktake_items":[dict(item) for item in stocktake_items],
+        "rental_terms":[dict(r) for r in rental_terms],
+        "rental_extensions":[dict(x) for x in rental_extensions]
     }
     return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="umbrella-backup.json"', "Cache-Control":"no-store"})
