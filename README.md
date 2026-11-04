@@ -95,7 +95,7 @@ python reset_db.py
 ```
 
 3. 표시되는 DB 경로를 확인하고, 정말 초기화하려면 **`RESET`** 을 입력합니다. 다른 입력은 취소됩니다.
-4. 기존 `umbrellas.db` 및 관련 SQLite `-wal`, `-shm` 파일은 `DATA_DIR/backups/<날짜-시간>/`에 **자동 백업**됩니다. 삭제하지 않습니다.
+4. SQLite 온라인 백업 API로 **일관된 `umbrellas.db` 스냅샷**을 만들고 무결성을 검사한 뒤, 기존 원본은 같은 백업 폴더의 `umbrellas.db.original`로 이동합니다. `-wal`/`-shm` 파일은 존재를 가정하지 않습니다. 연결이 남아 있거나 WAL/SHM 파일이 남으면 초기화를 중단합니다.
 5. 서버를 다시 실행합니다.
 
 ```bash
@@ -104,7 +104,7 @@ uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 
 서버 재시작 시 `init_db()`가 새 DB·관리자 계정·기본 월 10회 정책을 다시 생성합니다. `/admin`에 재로그인하여 확인하세요.
 
-**복구:** Uvicorn을 완전히 종료하고 새 DB를 다른 곳에 보관한 다음, 백업 폴더의 `umbrellas.db`와 해당 `-wal`·`-shm` 파일(있는 경우)을 **한 묶음으로** 원래 `DATA_DIR`에 돌려놓으세요. 백업 파일을 GitHub에 올리지 마세요.
+**복구:** Uvicorn과 모든 DB 연결을 완전히 종료하고 새 테스트 DB를 다른 곳에 보관한 뒤, 검증된 백업 폴더의 `umbrellas.db` 파일을 원래 `DATA_DIR/umbrellas.db`로 복사하세요. 이 파일은 SQLite가 만든 **일관된 스냅샷**이므로 별도 WAL/SHM 파일을 복구할 필요가 없습니다. 백업 폴더의 `umbrellas.db.original`도 보관됩니다. 복구 전에는 새 DB의 `-wal`/`-shm` 파일이 남아 있지 않은지 확인하세요. 백업 파일은 공개 GitHub에 올리지 마세요.
 
 **참고:** 월별 대여 제한은 매월 1일(한국 시간) 자동으로 새달 기준 계산됩니다. 월별 횟수 초기화만을 위해 DB 전체를 리셋할 필요는 없습니다.
 
