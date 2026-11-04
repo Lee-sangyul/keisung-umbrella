@@ -194,7 +194,7 @@ uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```bash
 pip install -r requirements.txt
 pip install pytest httpx
-pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py
+pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
 ```
 
 테스트는 임시 SQLite DB를 사용하며 운영 DB를 초기화하지 않습니다.
@@ -209,6 +209,35 @@ pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktak
 - 최초 등록된 PIN을 학생이 임의로 덮어쓸 수 없습니다. PIN을 잊으면 관리자 `/admin` → **학생·패널티 관리**에서 담당 교사가 신원을 확인한 뒤 재발급합니다.
 - **이전에 등록 승인 대기·반려 상태였던 PIN도 승인 단계 제거 후 원래 PIN으로 사용할 수 있습니다.** 기존 SQLite 데이터와 PIN 해시는 유지됩니다. 과거 승인 관련 테이블이 DB에 남아 있어도 새 프로그램은 사용하지 않습니다.
 - **주의:** 학년·반·번호만으로 학생 신원을 확인할 수 없어, 다른 학생이 먼저 등록하여 PIN을 선점할 수 있습니다. 실제 학교 운영 전 별도 신원 확인 및 보안 정책을 마련하세요.
+
+## 교직원 전용 대여 (v1.6)
+
+**학생 PIN 및 대여 흐름은 그대로 유지합니다.** 교직원은 학교에서 발급한 별도의 계정으로 `/staff`에서 공용 우산을 대여·반납합니다. 계정 이름과 ID는 관리자만 조회할 수 있습니다.
+
+### 관리자: 교직원 계정 발급
+
+1. `/admin` → **교직원 대여 관리**에서 교직원 ID(영문/숫자/하이픈/밑줄 3~20자), 이름 또는 표시명(2~50자)을 입력합니다.
+2. 실제 교직원 신원을 확인하고 체크한 뒤 발급합니다. 서버에서 **임의의 6자리 PIN**을 생성해 **그 순간에만** 관리자에게 보여 줍니다. PIN은 안전한 방법으로 해당 교직원 본인에게 전달해야 합니다.
+3. 관리자 메뉴에서 PIN 재발급 또는 계정 활성·비활성 변경이 가능합니다. PIN 재발급 시 기존 PIN은 무효화됩니다.
+4. 비활성 계정은 새 대여가 불가능하지만, 기존에 빌린 우산은 정확한 PIN으로 반납할 수 있습니다.
+
+### 교직원: 전용 키오스크
+
+- `/staff` → **우산 대여** 또는 **우산 반납**을 선택하고 교직원 ID·PIN·우산 번호를 입력합니다. ID는 대문자 처리됩니다. 우산 번호 직접 입력과 QR 카메라 스캔을 지원합니다(HTTPS/localhost 필요).
+- 교직원 1명당 **동시 대여 1개**입니다. 우산 재고는 학생과 공유하며 같은 우산을 동시에 빌릴 수 없습니다.
+- 학생 월 대여 횟수/패널티 정책은 **교직원에게 적용되지 않습니다**. 교직원 대여에는 기존 관리자의 **대여 기간 설정**이 적용되고 반납 예정일이 표시됩니다.
+- 관리자 재고/연체/이벤트 기록에는 대여자 `STAFF:교직원ID` 형태로 표기되어 학생(예: `6-4-16`)과 구별됩니다.
+- 잘못된 PIN이 반복되면 기존 학생 PIN처럼 **5회 실패 시 15분 잠금**됩니다. 교직원 PIN은 별도 테이블에서 `scrypt` + 개별 salt로 해시 보관됩니다.
+- 관리자는 직원 계정 생성·PIN 재발급·활성 변경 기록을 볼 수 있는 감사 데이터를 백업할 수 있지만, **PIN 원문이나 해시는 JSON 백업에 포함되지 않습니다.**
+- 교직원 계정과 대여 기록은 개인 정보일 수 있으니 학교 내부 권한/보존 정책을 적용하세요. **실제 운영 전 교직원 신원 확인 및 관리 절차 검토는 필수**입니다.
+
+### 자동 회귀 테스트
+
+```bash
+python -m pip install -r requirements.txt
+python -m pip install pytest httpx
+pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
+```
 
 ## 대여 기한·연체 관리 (v1.5)
 
@@ -231,7 +260,7 @@ pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktak
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install pytest httpx
-pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py
+pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
 ```
 
 테스트는 임시 SQLite DB에서 진행되며 실제 운영 DB를 초기화하지 않습니다.
