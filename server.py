@@ -500,6 +500,82 @@ def enroll_student_pin(data: StudentPinEnrollRequest, request: Request):
     )
 
 
+
+@app.get("/api/admin/student-pin/requests")
+def pending_student_pin_requests(request: Request):
+    """Admin-only approval queue; PINs and confirmation codes are never returned."""
+    require_admin(request)
+    with connect() as c:
+        rows = c.execute(
+            """SELECT student_id,status,requested_at,
+                      approval_code_hash IS NOT NULL AS has_approval_code
+               FROM student_pin_approvals
+               WHERE status='PENDING'
+               ORDER BY requested_at ASC LIMIT 1000"""
+        ).fetchall()
+    return Response(json.dumps({"pending_count":len(rows),"requests":[dict(r) for r in rows]},
+                               ensure_ascii=False),media_type="application/json",
+                    headers={"Cache-Control":"no-store"})
+
+
+@app.post("/api/admin/student-pin/requests/{student_id}/approve")
+def approve_student_pin_request(student_id: str, data: StudentPinApproveRequest,
+                                request: Request):
+    actor = require_admin(request, csrf=True)
+    student = validate_student(student_id)
+    if not data.verified_identity:
+        raise HTTPException(422,"학생의 신원을 직접 확인한 뒤 승인해 주세요.")
+    with transaction() as c:
+        record = c.execute(
+            "SELECT status,approval_code_hash FROM student_pin_approvals WHERE student_id=?",
+            (student,)
+        ).fetchone()
+        if not record or record["status"] != "PENDING":
+            raise HTTPException(409,"승인 대기 중인 PIN 신청이 아닙니다.")
+        if not record["approval_code_hash"]:
+            raise HTTPException(409,"기존 신청에는 확인 코드가 없습니다. 관리자 PIN을 재발급해 주세요.")
+        if not hmac.compare_digest(approval_code_digest(data.approval_code),
+                                   record["approval_code_hash"]):
+            raise HTTPException(403,"학생이 제시한 신청 확인 코드가 일치하지 않습니다.")
+        c.execute(
+            """UPDATE student_pin_approvals
+               SET status='APPROVED',approval_code_hash=NULL,reviewed_at=?,
+                   reviewed_by=?,review_reason='신원 및 신청 확인 코드 대조 완료'
+               WHERE student_id=? AND status='PENDING'""",
+            (now(),actor,student)
+        )
+        c.execute(
+            "INSERT INTO student_pin_review_log(student_id,action,actor,reason,created_at) VALUES(?,'APPROVED',?,?,?)",
+            (student,actor,"대면 신원 및 신청 코드 확인",now())
+        )
+    return {"ok":True,"student_id":student,"approval_status":"APPROVED"}
+
+
+@app.post("/api/admin/student-pin/requests/{student_id}/reject")
+def reject_student_pin_request(student_id: str,data: StudentPinRejectRequest,
+                               request: Request):
+    actor = require_admin(request,csrf=True)
+    student = validate_student(student_id)
+    reason = data.reason.strip()
+    if len(reason)<5:
+        raise HTTPException(422,"반려 사유는 5자 이상 작성해 주세요.")
+    with transaction() as c:
+        cur = c.execute(
+            """UPDATE student_pin_approvals
+               SET status='REJECTED',approval_code_hash=NULL,
+                   reviewed_at=?,reviewed_by=?,review_reason=?
+               WHERE student_id=? AND status='PENDING'""",
+            (now(),actor,reason,student)
+        )
+        if not cur.rowcount:
+            raise HTTPException(409,"승인 대기 중인 PIN 신청이 아닙니다.")
+        c.execute(
+            "INSERT INTO student_pin_review_log(student_id,action,actor,reason,created_at) VALUES(?,'REJECTED',?,?,?)",
+            (student,actor,reason,now())
+        )
+    return {"ok":True,"student_id":student,"approval_status":"REJECTED"}
+
+
 class PolicyRequest(BaseModel):
     monthly_limit: int = Field(ge=1,le=100)
 
@@ -854,14 +930,21 @@ def export(request: Request):
         policies = c.execute("SELECT key,value FROM policies ORDER BY key").fetchall()
         allowances = c.execute("SELECT * FROM student_allowances ORDER BY month,student_id").fetchall()
         penalties = c.execute("SELECT * FROM penalty_actions ORDER BY id").fetchall()
+        pin_approvals = c.execute(
+            """SELECT student_id,status,requested_at,reviewed_at,reviewed_by,review_reason
+               FROM student_pin_approvals ORDER BY student_id"""
+        ).fetchall()
+        pin_reviews = c.execute("SELECT * FROM student_pin_review_log ORDER BY id").fetchall()
     payload = {
-        "schema_version":"3.0",
+        "schema_version":"3.1",
         "exported_at":now(),
         "umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],
         "events":[dict(e) for e in events],
         "policies":[dict(p) for p in policies],
         "student_allowances":[dict(a) for a in allowances],
-        "penalty_actions":[dict(p) for p in penalties]
+        "penalty_actions":[dict(p) for p in penalties],
+        "student_pin_approvals":[dict(a) for a in pin_approvals],
+        "student_pin_review_log":[dict(r) for r in pin_reviews]
     }
     return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="umbrella-backup.json"', "Cache-Control":"no-store"})
