@@ -281,6 +281,7 @@
     <p class="fixednote">KEISUNG UMBRELLA · 관리자 접근 전용 · 서버 데이터 기준</p>
   </main>
 </div>
+<script src="/assets/jsQR.js"></script>
 <script>
 "use strict";
 const $=id=>document.getElementById(id);
@@ -493,6 +494,230 @@ async function rejectPinRequest(student){
  }catch(error){pinApprovalMessage("반려 실패: "+error.message,true);}
 }
 $("refreshPinRequests").onclick=loadPinRequests;
+
+
+let stocktakeCurrentId=null,stocktakeCurrentData=null,stocktakeBusy=false;
+let stocktakeStream=null,stocktakeTimer=null,stocktakeDetector=null,stocktakeDetecting=false;
+let stocktakeLastCode="",stocktakeLastAt=0;
+const stocktakeCanvas=document.createElement("canvas");
+const stocktakeCanvasContext=stocktakeCanvas.getContext("2d",{willReadFrequently:true});
+
+function stocktakeMessage(text,error=false){
+ const box=$("stocktakeMessage");
+ box.className="msg"+(error?" error":"");
+ box.textContent=text;
+}
+function normalizeStocktakeId(value){
+ const raw=String(value||"").trim().toUpperCase();
+ if(/^\d{1,9}$/.test(raw)){
+  const num=Number(raw);
+  return num>0?"UMB-"+String(num).padStart(4,"0"):null;
+ }
+ return /^UMB-\d{4,}$/.test(raw)?raw:null;
+}
+function renderStocktakeLocations(){
+ const select=$("stocktakeLocation");
+ if(!select)return;
+ const chosen=select.value||"ALL";
+ const found=[...new Set(inventory.map(x=>x.location||"미지정"))];
+ const options=["ALL",...found.filter(x=>x!=="ALL").sort((a,b)=>a.localeCompare(b,"ko"))];
+ select.replaceChildren(...options.map(x=>new Option(x==="ALL"?"학교 전체":x,x)));
+ select.value=options.includes(chosen)?chosen:"ALL";
+}
+function stocktakeMetric(label,value){
+ return '<div class="stocktake-metric">'+esc(label)+'<strong>'+esc(value)+'</strong></div>';
+}
+function stocktakeChips(items,emptyMsg){
+ if(!items.length)return '<span class="helper">'+esc(emptyMsg)+'</span>';
+ const shown=items.slice(0,180);
+ return shown.map(i=>'<span class="stocktake-id-chip" title="'+esc(i.current_location||"")+'">'+esc(i.umbrella_id)+'</span>').join("")+
+  (items.length>shown.length?'<p class="helper">외 '+(items.length-shown.length)+'개는 CSV에서 확인하세요.</p>':"");
+}
+function renderStocktakeDetails(data){
+ stocktakeCurrentData=data;
+ const s=data.session,items=data.items;
+ $("stocktakeActivePanel").classList.remove("hide");
+ $("stocktakeActiveTitle").textContent=s.title+" · #"+s.id;
+ $("stocktakeActiveDescription").textContent=(s.location==="ALL"?"학교 전체":s.location)+" · "+(s.status==="OPEN"?"진행 중":"완료됨")+" · "+new Date(s.created_at).toLocaleString("ko-KR");
+ $("stocktakeProgress").innerHTML=
+  stocktakeMetric("확인 대상",s.expected)+stocktakeMetric("확인 완료",s.verified)+
+  stocktakeMetric("미확인",s.missing)+stocktakeMetric("대상 외 확인",s.unexpected);
+ $("stocktakeScanControls").classList.toggle("hide",s.status!=="OPEN");
+ $("stocktakeComplete").disabled=s.status!=="OPEN";
+ const missing=items.filter(i=>i.expected===1&&!i.seen_at);
+ const unexpected=items.filter(i=>i.expected===0&&i.seen_at);
+ $("stocktakeMissing").innerHTML=stocktakeChips(missing,"미확인 우산이 없습니다.");
+ $("stocktakeUnexpected").innerHTML=stocktakeChips(unexpected,"대상 외 확인 우산이 없습니다.");
+ if(s.status!=="OPEN")stopStocktakeCamera();
+}
+async function loadStocktakeDetail(id){
+ if(!csrf||!id)return;
+ const data=await api("/api/admin/stocktakes/"+encodeURIComponent(id));
+ stocktakeCurrentId=data.session.id;
+ renderStocktakeDetails(data);
+}
+async function loadStocktakes(){
+ if(!csrf)return;
+ try{
+  const data=await api("/api/admin/stocktakes");
+  $("stocktakeSessionRows").innerHTML=data.sessions.map(s=>
+   '<tr><td><strong>'+esc(s.title)+'</strong><br><small>#'+s.id+' · '+esc(new Date(s.created_at).toLocaleString("ko-KR"))+'</small></td>'+
+   '<td>'+esc(s.location==="ALL"?"학교 전체":s.location)+'</td>'+
+   '<td>'+esc(s.status==="OPEN"?"진행 중":"완료")+'</td>'+
+   '<td>'+s.verified+' / '+s.expected+' · 미확인 '+s.missing+'</td>'+
+   '<td><button type="button" class="btn" data-audit-id="'+s.id+'">열기</button></td></tr>'
+  ).join("")||empty(5,"아직 시작된 재고 실사가 없습니다.");
+  for(const button of $("stocktakeSessionRows").querySelectorAll("[data-audit-id]")){
+   button.onclick=async()=>{try{await loadStocktakeDetail(Number(button.dataset.auditId));stocktakeMessage("실사 내용을 불러왔습니다.");}catch(error){stocktakeMessage(error.message,true);}};
+  }
+  if(stocktakeCurrentId)await loadStocktakeDetail(stocktakeCurrentId);
+ }catch(error){stocktakeMessage("실사 조회 실패: "+error.message,true);}
+}
+$("stocktakeRefresh").onclick=async()=>{await refresh();await loadStocktakes();};
+$("stocktakeAssignLocation").onclick=async()=>{
+ if(stocktakeBusy)return;
+ const first=normalizeStocktakeId($("stocktakeRangeStart").value),last=normalizeStocktakeId($("stocktakeRangeEnd").value);
+ const location=$("stocktakeLocationName").value.trim();
+ if(!first||!last||!location)return stocktakeMessage("시작·끝 우산 번호와 보관 위치를 정확히 입력해 주세요.",true);
+ if(!confirm(first+" ~ "+last+" 범위의 보관 위치를 '"+location+"'로 지정할까요?"))return;
+ stocktakeBusy=true;
+ try{
+  const r=await api("/api/admin/inventory/locations",{method:"PUT",auth:true,
+    body:{start_id:first,end_id:last,location}});
+  stocktakeMessage(r.count+"개 우산의 보관 위치를 '"+r.location+"'로 지정했어요.");
+  await refresh();await loadStocktakes();
+ }catch(error){stocktakeMessage("위치 지정 실패: "+error.message,true);}
+ finally{stocktakeBusy=false;}
+};
+$("stocktakeCreate").onclick=async()=>{
+ if(stocktakeBusy)return;
+ const title=$("stocktakeTitle").value.trim(),location=$("stocktakeLocation").value;
+ if(title.length<3)return stocktakeMessage("실사 이름은 3글자 이상 입력해 주세요.",true);
+ if(!confirm("새 실사 '"+title+"'을(를) 시작할까요?\n현재 대여 가능·파손 우산만 확인 대상으로 기록됩니다."))return;
+ stocktakeBusy=true;
+ try{
+  const r=await api("/api/admin/stocktakes",{method:"POST",auth:true,body:{title,location}});
+  stocktakeCurrentId=r.session.id;
+  $("stocktakeTitle").value="";
+  await loadStocktakes();
+  stocktakeMessage("실사 #"+stocktakeCurrentId+" 시작! 대상 "+r.session.expected+"개를 점검해 주세요.");
+  $("stocktakeActivePanel").scrollIntoView({behavior:"smooth",block:"start"});
+ }catch(error){stocktakeMessage("실사 시작 실패: "+error.message,true);}
+ finally{stocktakeBusy=false;}
+};
+async function scanStocktakeIds(identifiers){
+ if(stocktakeBusy||!stocktakeCurrentId)return;
+ if(!stocktakeCurrentData||stocktakeCurrentData.session.status!=="OPEN")
+  return stocktakeMessage("진행 중인 실사를 먼저 선택해 주세요.",true);
+ const normalized=identifiers.map(normalizeStocktakeId);
+ if(!normalized.length||normalized.length>500||normalized.some(x=>!x)){
+  return stocktakeMessage("우산 ID는 UMB-0001 형식 또는 숫자로 입력하고, 한 번에 최대 500개까지 확인해 주세요.",true);
+ }
+ stocktakeBusy=true;
+ try{
+  const response=await api("/api/admin/stocktakes/"+stocktakeCurrentId+"/scan-batch",
+    {method:"POST",auth:true,body:{umbrella_ids:normalized}});
+  const tally={};
+  for(const item of response.results)tally[item.result]=(tally[item.result]||0)+1;
+  stocktakeMessage("확인 "+(tally.VERIFIED||0)+"개 · 중복 "+(tally.DUPLICATE||0)+
+    "개 · 대상 외 "+(tally.OUT_OF_SCOPE||0)+"개 · 미등록 "+(tally.UNREGISTERED||0)+"개"+
+    (tally.UNREGISTERED?" (미등록: "+response.results.filter(x=>x.result==="UNREGISTERED").slice(0,12).map(x=>x.id).join(", ")+")":""));
+  $("stocktakeSingle").value="";$("stocktakeBatch").value="";
+  await loadStocktakeDetail(stocktakeCurrentId);
+  await loadStocktakes();
+ }catch(error){stocktakeMessage("우산 확인 실패: "+error.message,true);}
+ finally{stocktakeBusy=false;}
+}
+$("stocktakeScanOne").onclick=()=>scanStocktakeIds([$("stocktakeSingle").value]);
+$("stocktakeSingle").addEventListener("keydown",event=>{
+ if(event.key==="Enter"){event.preventDefault();$("stocktakeScanOne").click();}
+});
+$("stocktakeScanBatch").onclick=()=>{
+ const raw=$("stocktakeBatch").value.trim();
+ const values=raw.split(/[\s,;]+/).filter(Boolean);
+ scanStocktakeIds(values);
+};
+$("stocktakeComplete").onclick=async()=>{
+ if(stocktakeBusy||!stocktakeCurrentId)return;
+ const s=stocktakeCurrentData?.session;
+ if(!s||s.status!=="OPEN")return;
+ if(!confirm("실사 #"+s.id+"을 완료할까요?\n미확인 "+s.missing+"개는 실사 결과로 남지만 자동 분실 처리되지 않습니다."))return;
+ stocktakeBusy=true;stopStocktakeCamera();
+ try{
+  await api("/api/admin/stocktakes/"+stocktakeCurrentId+"/complete",{method:"POST",auth:true});
+  await loadStocktakes();
+  stocktakeMessage("실사 완료! CSV로 미확인 목록을 다운로드할 수 있습니다.");
+ }catch(error){stocktakeMessage("실사 완료 실패: "+error.message,true);}
+ finally{stocktakeBusy=false;}
+};
+$("stocktakeExport").onclick=async()=>{
+ if(!stocktakeCurrentId)return;
+ try{
+  const res=await fetch("/api/admin/stocktakes/"+stocktakeCurrentId+"/export",{credentials:"same-origin",cache:"no-store"});
+  if(!res.ok)throw Error("CSV 다운로드 실패 ("+res.status+")");
+  const blob=await res.blob(),url=URL.createObjectURL(blob),a=document.createElement("a");
+  a.href=url;a.download="stocktake-"+stocktakeCurrentId+".csv";a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+ }catch(error){stocktakeMessage(error.message,true);}
+};
+function stopStocktakeCamera(){
+ if(stocktakeTimer){clearInterval(stocktakeTimer);stocktakeTimer=null;}
+ if(stocktakeStream){for(const track of stocktakeStream.getTracks())track.stop();stocktakeStream=null;}
+ const video=$("stocktakeVideo");
+ if(video){video.pause();video.srcObject=null;}
+ const area=$("stocktakeCameraBox");
+ if(area)area.classList.add("hide");
+ const button=$("stocktakeCameraToggle");
+ if(button)button.textContent="QR 카메라 켜기";
+ stocktakeDetector=null;stocktakeDetecting=false;
+}
+async function stocktakeDecodeQr(video){
+ if(stocktakeDetector){
+  try{const codes=await stocktakeDetector.detect(video);return codes[0]?.rawValue||null;}
+  catch(error){console.warn("QR native decode failed",error);stocktakeDetector=null;}
+ }
+ if(typeof jsQR!=="function"||!stocktakeCanvasContext||!video.videoWidth)return null;
+ const scale=Math.min(1,640/Math.max(video.videoWidth,video.videoHeight));
+ stocktakeCanvas.width=Math.round(video.videoWidth*scale);
+ stocktakeCanvas.height=Math.round(video.videoHeight*scale);
+ stocktakeCanvasContext.drawImage(video,0,0,stocktakeCanvas.width,stocktakeCanvas.height);
+ const frame=stocktakeCanvasContext.getImageData(0,0,stocktakeCanvas.width,stocktakeCanvas.height);
+ const code=jsQR(frame.data,frame.width,frame.height,{inversionAttempts:"attemptBoth"});
+ return code?.data||null;
+}
+$("stocktakeCameraToggle").onclick=async()=>{
+ if(stocktakeStream){stopStocktakeCamera();return;}
+ if(!window.isSecureContext||!navigator.mediaDevices?.getUserMedia)
+  return stocktakeMessage("카메라는 HTTPS 또는 localhost에서만 사용할 수 있어요. ID 수동 입력을 이용해 주세요.",true);
+ if(!stocktakeCurrentData||stocktakeCurrentData.session.status!=="OPEN")
+  return stocktakeMessage("진행 중인 실사를 먼저 선택해 주세요.",true);
+ try{
+  if(typeof BarcodeDetector!=="undefined"){
+   const formats=await BarcodeDetector.getSupportedFormats?.();
+   if(!formats||formats.includes("qr_code"))stocktakeDetector=new BarcodeDetector({formats:["qr_code"]});
+  }
+  if(!stocktakeDetector&&typeof jsQR!=="function")throw Error("QR 판독기를 사용할 수 없습니다.");
+  stocktakeStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+  const video=$("stocktakeVideo");video.srcObject=stocktakeStream;
+  $("stocktakeCameraBox").classList.remove("hide");
+  await video.play();
+  $("stocktakeCameraToggle").textContent="QR 카메라 끄기";
+  stocktakeTimer=setInterval(async()=>{
+   if(stocktakeDetecting||stocktakeBusy||!stocktakeStream)return;
+   stocktakeDetecting=true;
+   try{
+    const found=normalizeStocktakeId(await stocktakeDecodeQr(video));
+    if(found&&!(stocktakeLastCode===found&&Date.now()-stocktakeLastAt<4000)){
+     stocktakeLastCode=found;stocktakeLastAt=Date.now();
+     await scanStocktakeIds([found]);
+    }
+   }catch(error){console.warn("QR scan error",error);}
+   finally{stocktakeDetecting=false;}
+  },350);
+ }catch(error){stopStocktakeCamera();stocktakeMessage("QR 카메라 시작 실패: "+error.message,true);}
+};
+window.addEventListener("pagehide",stopStocktakeCamera);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="hidden")stopStocktakeCamera();});
 
 const POLICY_CODES={LOST:"분실",ACCIDENTAL_DAMAGE:"과실 파손",INTENTIONAL_DAMAGE:"고의 파손",WARNING:"경고",REVERSAL:"패널티 취소"};
 let selectedPolicyStudent="",policyRecord=null;
