@@ -38,6 +38,18 @@ h1{font-size:clamp(38px,4.5vw,76px);line-height:1.15;letter-spacing:-.075em;marg
 .manualbox input{width:100%;height:clamp(65px,8vh,100px);border:2px solid #e9dcd5;border-radius:17px;padding:0 17px;text-align:center;font-size:clamp(24px,2.2vw,43px);font-weight:900;letter-spacing:.02em;text-transform:uppercase;min-width:0}
 .review-card{background:white;border:2px solid #f0e1d9;border-radius:30px;width:min(100%,970px);padding:clamp(25px,4vw,64px);margin-top:clamp(24px,5vh,60px);text-align:left}
 .review-row{display:flex;justify-content:space-between;gap:15px;border-bottom:1px solid #f1e5df;padding:clamp(13px,2vh,28px) 0;font-size:clamp(19px,1.7vw,30px)}.review-row:last-child{border:0}.review-row span{color:#7d7377;font-weight:700}.review-row strong{font-weight:950}
+.pin-panel{width:min(100%,570px);margin:18px auto 0;text-align:center;display:grid;justify-items:center;gap:6px}
+.pin-panel label{font-size:clamp(18px,1.65vw,27px);font-weight:950}
+.pin-panel p{margin:0 0 8px;color:#706771;font-size:clamp(12px,1vw,16px);line-height:1.4}
+.pin-panel input{width:min(100%,260px);height:56px;border:2px solid #efc5b8;border-radius:14px;text-align:center;font-weight:900;letter-spacing:.36em;font-size:29px;background:#fff}
+.pin-keypad{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:min(100%,280px);margin-top:6px}
+.pin-keypad button{height:clamp(43px,5.5vh,54px);border-radius:11px;border:1px solid #ebded8;background:#fff;font-size:21px;font-weight:800;color:#322c32}
+.pin-keypad button:active{background:#ffeddf}
+#review .center{justify-content:flex-start;overflow-y:auto;padding:0 12px 12px}
+#review h1{font-size:clamp(28px,3.5vw,55px);margin-bottom:6px}
+#review .sub{font-size:clamp(14px,1.2vw,21px)}
+#review .review-card{margin-top:clamp(10px,2vh,22px);padding:clamp(14px,2.5vw,34px)}
+#review .review-row{padding:clamp(7px,1.4vh,14px) 0;font-size:clamp(17px,1.4vw,24px)}
 .done-icon{font-size:clamp(85px,9vw,165px);margin-bottom:20px}.error{color:#c62d36}
 .overlay{position:fixed;inset:0;background:#201414d9;display:grid;place-items:center;padding:20px;z-index:50}.hidden{display:none!important}.modal{width:min(100%,850px);background:white;border-radius:29px;padding:30px;text-align:center}.modal h2{font-size:33px;margin:0 0 12px}.modal p{font-size:20px;color:#645f62}.modal video{width:100%;max-height:55vh;border-radius:15px;background:#15151c;object-fit:cover}.modal button{margin-top:16px;border:0;background:#ff6541;color:white;border-radius:17px;padding:18px 55px;font-size:22px;font-weight:900}
 @media(min-width:1000px) and (min-aspect-ratio:16/10){.shell{height:100dvh}.page{overflow:hidden}}
@@ -133,7 +145,10 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
   </section>
   <section class="page" id="review"><div class="progress"><span class="current"></span><span class="current"></span><span class="current"></span></div>
    <div class="center"><p class="eyebrow">마지막 단계</p><h1>정보가 맞는지 확인해 주세요</h1><p class="sub">다른 학생의 정보를 입력하면 안 돼요.</p>
-   <div class="review-card"><div class="review-row"><span>이용 방법</span><strong id="vAction">대여</strong></div><div class="review-row"><span>학생</span><strong id="vStudent">-</strong></div><div class="review-row"><span>우산</span><strong id="vUmbrella">-</strong></div></div></div>
+   <div class="review-card"><div class="review-row"><span>이용 방법</span><strong id="vAction">대여</strong></div><div class="review-row"><span>학생</span><strong id="vStudent">-</strong></div><div class="review-row"><span>우산</span><strong id="vUmbrella">-</strong></div></div>
+   <div class="pin-panel"><label for="studentPin">학생 PIN (숫자 6자리)</label><p>담당 선생님에게 발급받은 PIN을 입력해 주세요. 남이 보는 곳에서 PIN을 공유하면 안 돼요.</p>
+   <input id="studentPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" autocapitalize="off" placeholder="••••••" aria-label="학생 PIN 6자리">
+   <div class="pin-keypad" id="pinKeypad" aria-label="PIN 숫자 키패드"></div></div></div>
   </section>
   <section class="page" id="done"><div class="center"><div class="done-icon" id="doneIcon">✅</div><h1 id="doneTitle">완료되었습니다!</h1><p class="sub" id="doneMessage">이용해 주셔서 감사합니다.</p></div></section>
  </main>
@@ -163,10 +178,10 @@ function show(n){
  $("next").disabled=false;
  if(n===1){renderTiles();}
  if(n===2){$("next").textContent="정보 확인 →";$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase());}
- if(n===3){$("next").textContent=mode==="borrow"?"대여 확정하기":"반납 확정하기";$("vAction").textContent=mode==="borrow"?"우산 대여":"우산 반납";$("vStudent").textContent=grade+"학년 "+klass+"반 "+number+"번";$("vUmbrella").textContent=$("umbrella").value.trim().toUpperCase();}
+ if(n===3){$("next").textContent=mode==="borrow"?"PIN 확인 후 대여":"PIN 확인 후 반납";$("next").disabled=!pinReady();$("vAction").textContent=mode==="borrow"?"우산 대여":"우산 반납";$("vStudent").textContent=grade+"학년 "+klass+"반 "+number+"번";$("vUmbrella").textContent=$("umbrella").value.trim().toUpperCase();}
  $("summary").textContent=n===0?"한 학생당 우산 1개까지 대여 가능":n===4?"안전하게 이용해 주세요":mode==="borrow"?"우산 대여 진행 중":"우산 반납 진행 중";
 }
-function start(m){mode=m;grade=0;klass=0;number=0;part=0;$("umbrella").value="";show(1);}
+function start(m){mode=m;grade=0;klass=0;number=0;part=0;$("umbrella").value="";$("studentPin").value="";show(1);}
 $("startBorrow").onclick=()=>start("borrow");$("startReturn").onclick=()=>start("return");
 function renderTiles(){
  const vals=[grade,klass,number],active=part;
@@ -178,18 +193,36 @@ function renderTiles(){
  $("next").textContent="다음 단계 →";$("next").disabled=!(grade&&klass&&number);
 }
 $("umbrella").addEventListener("input",()=>{$("umbrella").value=$("umbrella").value.toUpperCase();if(step===2)$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim());});
+function pinReady(){return /^\\d{6}$/.test($("studentPin").value);}
+const pinKeys=["1","2","3","4","5","6","7","8","9","지우기","0","←"];
+for(const key of pinKeys){
+ const button=document.createElement("button");
+ button.type="button";button.textContent=key;
+ button.setAttribute("aria-label",key==="←"?"마지막 숫자 지우기":key==="지우기"?"PIN 전체 지우기":key);
+ button.onclick=()=>{
+  if(key==="지우기")$("studentPin").value="";
+  else if(key==="←")$("studentPin").value=$("studentPin").value.slice(0,-1);
+  else if($("studentPin").value.length<6)$("studentPin").value+=key;
+  $("next").disabled=!pinReady();
+ };
+ $("pinKeypad").append(button);
+}
+$("studentPin").addEventListener("input",()=>{
+ $("studentPin").value=$("studentPin").value.replace(/\\D/g,"").slice(0,6);
+ if(step===3)$("next").disabled=!pinReady();
+});
 $("back").onclick=()=>{if(busy)return;if(step===1||step===4)show(0);else if(step===2)show(1);else if(step===3)show(2);};
 async function api(path,body){const res=await fetch(path,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"same-origin"});const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(typeof data.detail==="string"?data.detail:"서버 오류 "+res.status);return data;}
 async function finalize(){
- if(busy)return;
+ if(busy||!pinReady())return;
  busy=true;$("next").disabled=true;
- try{const result=await api("/api/"+mode,{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade,classroom:klass,number});
+ try{const result=await api("/api/"+mode,{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade,classroom:klass,number,pin:$("studentPin").value});
    $("doneIcon").textContent="✅";$("doneTitle").textContent=mode==="borrow"?"대여가 완료됐어요!":"반납이 완료됐어요!";
    $("doneMessage").textContent=mode==="borrow"?"우산을 잘 사용하고 반납해 주세요.\n이번 달 남은 대여 횟수: "+result.remaining+"회":"반납해 주셔서 고마워요.";show(4);await refresh();
  }catch(err){$("doneIcon").textContent="⚠️";$("doneTitle").textContent="처리하지 못했어요";$("doneMessage").textContent=err.message;show(4);}
- finally{busy=false;}
+ finally{$("studentPin").value="";busy=false;}
 }
-$("next").onclick=()=>{if(step===1&&grade&&klass&&number)show(2);else if(step===2&&/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase()))show(3);else if(step===3)finalize();};
+$("next").onclick=()=>{if(step===1&&grade&&klass&&number)show(2);else if(step===2&&/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase()))show(3);else if(step===3&&pinReady())finalize();};
 async function refresh(){try{const data=await api("/api/umbrellas");$("stock").textContent="● 대여 가능 "+data.filter(x=>x.status==="AVAILABLE").length+"개";}catch{$("stock").textContent="● 연결 확인 필요";}}
 // Decode printed umbrella IDs from the live camera only; no photo uploads.
 const scanCanvas=document.createElement("canvas"),scanContext=scanCanvas.getContext("2d",{willReadFrequently:true});
