@@ -26,3 +26,5 @@ jobs:
         run: python -m compileall -q server.py tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
       - name: Run regression suite
         run: pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
+      - name: Verify single kiosk interaction flow
+        run: node tests/unified_kiosk_ui.cjs
