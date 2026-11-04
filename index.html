@@ -139,7 +139,7 @@ function renderStats(){
 }
 function renderInventory(){
  const search=$("search").value.trim().toUpperCase(),status=$("filter").value;
- const normalized=search.replace(/\\s/g,"").replace(/학년|반|번/g,"-").replace(/-+/g,"-").replace(/-$/,"");
+ const normalized=search.replace(/\s/g,"").replace(/학년|반|번/g,"-").replace(/-+/g,"-").replace(/-$/,"");
  const items=inventory.filter(x=>(!search||x.id.includes(search)||String(x.borrower||"").includes(normalized))&&(!status||x.status===status));
  $("inventoryRows").innerHTML=items.map(x=>'<tr><td><strong>'+esc(x.id)+'</strong></td><td>'+pill(x.status)+'</td><td>'+esc(x.borrower||"—")+'</td><td><button class="btn" data-id="'+esc(x.id)+'" '+(x.status==="DISPOSED"?"disabled":"")+'>관리</button></td></tr>').join("")||empty(4,"검색된 우산이 없습니다.");
  for(const b of $("inventoryRows").querySelectorAll("[data-id]"))b.onclick=()=>{$("adminId").value=b.dataset.id;$("manageCard").scrollIntoView({behavior:"smooth",block:"center"});};
