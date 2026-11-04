@@ -84,7 +84,7 @@ function stopScan(){if(interval){clearInterval(interval);interval=null;}if(strea
 $("closeModal").onclick=hideModal;
 function show(n){
  step=n;pages.forEach((id,i)=>$(id).classList.toggle("active",i===n));
- $("back").classList.toggle("hidden",n===4);
+ $("back").classList.remove("hidden");
  $("next").classList.toggle("hidden",n===0||n===4);
  $("next").disabled=false;
  if(n===1){renderTiles();}
@@ -103,7 +103,7 @@ function renderTiles(){
  $("next").textContent="다음 단계 →";$("next").disabled=!(grade&&klass&&number);
 }
 $("umbrella").addEventListener("input",()=>{$("umbrella").value=$("umbrella").value.toUpperCase();if(step===2)$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim());});
-$("back").onclick=()=>{if(busy)return;if(step===1)show(0);else if(step===2)show(1);else if(step===3)show(2);};
+$("back").onclick=()=>{if(busy)return;if(step===1||step===4)show(0);else if(step===2)show(1);else if(step===3)show(2);};
 async function api(path,body){const res=await fetch(path,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"same-origin"});const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(typeof data.detail==="string"?data.detail:"서버 오류 "+res.status);return data;}
 async function finalize(){
  if(busy)return;
