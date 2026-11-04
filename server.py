@@ -15,6 +15,7 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -27,6 +28,7 @@ COOKIE = "umbrella_admin"
 APP_ORIGIN = os.getenv("APP_ORIGIN", "").rstrip("/")
 SECURE_COOKIES = os.getenv("SECURE_COOKIES", "false").lower() == "true"
 app = FastAPI(title="Keisung Umbrella API", docs_url=None, redoc_url=None)
+app.mount("/assets", StaticFiles(directory=ROOT / "assets"), name="assets")
 STATES = {"AVAILABLE", "BORROWED", "LOST", "DAMAGED", "DISPOSED"}
 ID_RE = re.compile(r"^UMB-\d{4,}$")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
@@ -177,8 +179,8 @@ def require_admin(request: Request, csrf=False):
 class StudentRequest(BaseModel):
     umbrella_id: str
     grade: int = Field(ge=1, le=6)
-    classroom: int = Field(ge=1, le=12)
-    number: int = Field(ge=1, le=40)
+    classroom: int = Field(ge=1, le=4)
+    number: int = Field(ge=1, le=36)
 
 
 class LoginRequest(BaseModel):
