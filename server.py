@@ -111,27 +111,6 @@ def init_db():
             updated_at TEXT NOT NULL,
             updated_by TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS student_pin_approvals (
-            student_id TEXT PRIMARY KEY REFERENCES student_pins(student_id) ON DELETE CASCADE,
-            status TEXT NOT NULL CHECK(status IN ('PENDING','APPROVED','REJECTED')),
-            approval_code_hash TEXT,
-            requested_at TEXT NOT NULL,
-            reviewed_at TEXT,
-            reviewed_by TEXT,
-            review_reason TEXT
-        );
-        CREATE INDEX IF NOT EXISTS pin_approval_queue_idx
-            ON student_pin_approvals(status,requested_at);
-        CREATE TABLE IF NOT EXISTS student_pin_review_log (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_id TEXT NOT NULL,
-            action TEXT NOT NULL,
-            actor TEXT NOT NULL,
-            reason TEXT NOT NULL DEFAULT '',
-            created_at TEXT NOT NULL
-        );
-        CREATE INDEX IF NOT EXISTS pin_review_student_idx
-            ON student_pin_review_log(student_id,id);
         CREATE TABLE IF NOT EXISTS umbrella_locations (
             umbrella_id INTEGER PRIMARY KEY REFERENCES umbrellas(id),
             location TEXT NOT NULL,
@@ -192,16 +171,6 @@ def init_db():
     finally:
         c.close()
     with transaction() as c:
-        # Existing self-enrolled PINs become PENDING. Staff-issued PINs retain access.
-        c.execute("""INSERT OR IGNORE INTO student_pin_approvals(
-            student_id,status,approval_code_hash,requested_at,reviewed_at,reviewed_by,review_reason)
-            SELECT student_id,
-                   CASE WHEN updated_by='self-enrollment' THEN 'PENDING' ELSE 'APPROVED' END,
-                   NULL,updated_at,
-                   CASE WHEN updated_by='self-enrollment' THEN NULL ELSE updated_at END,
-                   CASE WHEN updated_by='self-enrollment' THEN NULL ELSE updated_by END,
-                   CASE WHEN updated_by='self-enrollment' THEN NULL ELSE '기존 관리자 발급 PIN 이관' END
-            FROM student_pins""")
         c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('monthly_limit',10)")
         salt = secrets.token_bytes(16)
         # .env is the source of truth for the single bootstrap admin.
@@ -356,27 +325,9 @@ class StudentPinEnrollRequest(StudentPinStatusRequest):
     pin_confirm: str = Field(pattern=r"^\d{6}$", min_length=6, max_length=6)
 
 
-class StudentPinApproveRequest(BaseModel):
-    verified_identity: bool = False
-    approval_code: str = Field(min_length=8,max_length=8,pattern=r"^[A-HJ-NP-Z2-9]{8}$")
-
-
-class StudentPinRejectRequest(BaseModel):
-    reason: str = Field(min_length=5,max_length=500)
-
-
 class StudentPinIssueRequest(BaseModel):
     student_id: str
     verified_identity: bool = False
-
-
-def new_approval_code() -> str:
-    # Not a PIN. Only the applicant receives this verification ticket.
-    return "".join(secrets.choice("ABCDEFGHJKLMNPQRSTUVWXYZ23456789") for _ in range(8))
-
-
-def approval_code_digest(code: str) -> str:
-    return hashlib.sha256(("keisung-pin-approval:v1:" + code).encode("ascii")).hexdigest()
 
 
 def student_pin_hash(pin: str, salt: bytes) -> bytes:
@@ -387,13 +338,8 @@ def check_student_pin(c, student: str, pin: str) -> str:
     """Return ok/invalid/locked. Never throw inside transaction or failed-attempt updates roll back."""
     current = int(time.time())
     row = c.execute(
-        """SELECT p.*,a.status AS approval_status FROM student_pins p
-           LEFT JOIN student_pin_approvals a ON a.student_id=p.student_id
-           WHERE p.student_id=?""", (student,)
+        "SELECT * FROM student_pins WHERE student_id=?", (student,)
     ).fetchone()
-    # Missing approval record is not an implicit grant.
-    if row and row["approval_status"] != "APPROVED":
-        return "rejected" if row["approval_status"] == "REJECTED" else "pending"
     if row and row["locked_until"] > current:
         return "locked"
     salt = row["salt"] if row else b"0" * 16
@@ -418,10 +364,6 @@ def check_student_pin(c, student: str, pin: str) -> str:
 
 
 def student_pin_error(result: str):
-    if result == "pending":
-        raise HTTPException(403, "담당 선생님의 최초 PIN 등록 승인을 기다리고 있습니다.")
-    if result == "rejected":
-        raise HTTPException(403, "PIN 등록 신청이 반려되었습니다. 담당 선생님께 새 PIN 발급을 요청하세요.")
     if result == "locked":
         raise HTTPException(429, "PIN 입력 실패가 누적되어 15분간 인증이 제한됩니다. 담당 선생님께 문의하세요.")
     if result != "ok":
@@ -447,20 +389,6 @@ def issue_student_pin(data: StudentPinIssueRequest, request: Request):
                updated_at=excluded.updated_at,updated_by=excluded.updated_by""",
             (student, salt, digest, now(), actor)
         )
-        c.execute(
-            """INSERT INTO student_pin_approvals
-               (student_id,status,approval_code_hash,requested_at,reviewed_at,reviewed_by,review_reason)
-               VALUES(?,'APPROVED',NULL,?,?,?,'관리자 PIN 발급 및 신원 확인')
-               ON CONFLICT(student_id) DO UPDATE SET
-                 status='APPROVED',approval_code_hash=NULL,
-                 reviewed_at=excluded.reviewed_at,reviewed_by=excluded.reviewed_by,
-                 review_reason=excluded.review_reason""",
-            (student, now(), now(), actor)
-        )
-        c.execute(
-            "INSERT INTO student_pin_review_log(student_id,action,actor,reason,created_at) VALUES(?,'ISSUED',?,?,?)",
-            (student,actor,"담당 교사 신원 확인 후 PIN 발급",now())
-        )
     return Response(content=json.dumps({"student_id":student,"pin":pin},ensure_ascii=False),
                     media_type="application/json",
                     headers={"Cache-Control":"no-store","Pragma":"no-cache"})
@@ -473,14 +401,11 @@ def student_pin_status(data: StudentPinStatusRequest, request: Request):
     verify_origin(request)
     student = validate_student(f"{data.grade}-{data.classroom}-{data.number}")
     with connect() as c:
-        record = c.execute(
-            """SELECT p.student_id,a.status FROM student_pins p
-               LEFT JOIN student_pin_approvals a ON p.student_id=a.student_id
-               WHERE p.student_id=?""", (student,)
-        ).fetchone()
+        registered = c.execute(
+            "SELECT 1 FROM student_pins WHERE student_id=?", (student,)
+        ).fetchone() is not None
     return Response(
-        json.dumps({"has_pin": record is not None,
-                    "approval_status":(record["status"] or "PENDING") if record else "NOT_REGISTERED"}),
+        json.dumps({"has_pin": registered}),
         media_type="application/json",
         headers={"Cache-Control": "no-store"}
     )
@@ -496,7 +421,6 @@ def enroll_student_pin(data: StudentPinEnrollRequest, request: Request):
     if len(set(data.pin)) == 1 or data.pin in {"123456", "654321", "121212", "112233"}:
         raise HTTPException(422, "너무 쉬운 PIN입니다. 다른 숫자 6자리로 설정해 주세요.")
     salt = secrets.token_bytes(16)
-    approval_code = new_approval_code()
     with transaction() as c:
         # No UPSERT: never overwrite existing credentials, even during concurrent requests.
         cur = c.execute(
@@ -507,103 +431,16 @@ def enroll_student_pin(data: StudentPinEnrollRequest, request: Request):
             (student, salt, student_pin_hash(data.pin, salt), now(), "self-enrollment")
         )
         created = cur.rowcount == 1
-        if created:
-            c.execute(
-                """INSERT INTO student_pin_approvals
-                   (student_id,status,approval_code_hash,requested_at)
-                   VALUES(?,'PENDING',?,?)""",
-                (student,approval_code_digest(approval_code),now())
-            )
-            c.execute(
-                "INSERT INTO student_pin_review_log(student_id,action,actor,created_at) VALUES(?,'REQUESTED',?,?)",
-                (student,student,now())
-            )
     if not created:
         raise HTTPException(
-            409, "이미 PIN 신청 내역이 있습니다. 담당 선생님께 승인 상태를 확인하거나 새 PIN 발급을 요청하세요."
+            409, "이미 PIN을 설정한 학생입니다. 기존 PIN으로 이용하거나 담당 선생님께 재발급을 요청하세요."
         )
     return Response(
-        json.dumps({"ok": True, "student_id": student,
-                    "approval_status": "PENDING","approval_code": approval_code}, ensure_ascii=False),
+        json.dumps({"ok": True, "student_id": student}, ensure_ascii=False),
         media_type="application/json",
         headers={"Cache-Control": "no-store"}
     )
 
-
-
-@app.get("/api/admin/student-pin/requests")
-def pending_student_pin_requests(request: Request):
-    """Admin-only approval queue; PINs and confirmation codes are never returned."""
-    require_admin(request)
-    with connect() as c:
-        rows = c.execute(
-            """SELECT student_id,status,requested_at,
-                      approval_code_hash IS NOT NULL AS has_approval_code
-               FROM student_pin_approvals
-               WHERE status='PENDING'
-               ORDER BY requested_at ASC LIMIT 1000"""
-        ).fetchall()
-    return Response(json.dumps({"pending_count":len(rows),"requests":[dict(r) for r in rows]},
-                               ensure_ascii=False),media_type="application/json",
-                    headers={"Cache-Control":"no-store"})
-
-
-@app.post("/api/admin/student-pin/requests/{student_id}/approve")
-def approve_student_pin_request(student_id: str, data: StudentPinApproveRequest,
-                                request: Request):
-    actor = require_admin(request, csrf=True)
-    student = validate_student(student_id)
-    if not data.verified_identity:
-        raise HTTPException(422,"학생의 신원을 직접 확인한 뒤 승인해 주세요.")
-    with transaction() as c:
-        record = c.execute(
-            "SELECT status,approval_code_hash FROM student_pin_approvals WHERE student_id=?",
-            (student,)
-        ).fetchone()
-        if not record or record["status"] != "PENDING":
-            raise HTTPException(409,"승인 대기 중인 PIN 신청이 아닙니다.")
-        if not record["approval_code_hash"]:
-            raise HTTPException(409,"기존 신청에는 확인 코드가 없습니다. 관리자 PIN을 재발급해 주세요.")
-        if not hmac.compare_digest(approval_code_digest(data.approval_code),
-                                   record["approval_code_hash"]):
-            raise HTTPException(403,"학생이 제시한 신청 확인 코드가 일치하지 않습니다.")
-        c.execute(
-            """UPDATE student_pin_approvals
-               SET status='APPROVED',approval_code_hash=NULL,reviewed_at=?,
-                   reviewed_by=?,review_reason='신원 및 신청 확인 코드 대조 완료'
-               WHERE student_id=? AND status='PENDING'""",
-            (now(),actor,student)
-        )
-        c.execute(
-            "INSERT INTO student_pin_review_log(student_id,action,actor,reason,created_at) VALUES(?,'APPROVED',?,?,?)",
-            (student,actor,"대면 신원 및 신청 코드 확인",now())
-        )
-    return {"ok":True,"student_id":student,"approval_status":"APPROVED"}
-
-
-@app.post("/api/admin/student-pin/requests/{student_id}/reject")
-def reject_student_pin_request(student_id: str,data: StudentPinRejectRequest,
-                               request: Request):
-    actor = require_admin(request,csrf=True)
-    student = validate_student(student_id)
-    reason = data.reason.strip()
-    if len(reason)<5:
-        raise HTTPException(422,"반려 사유는 5자 이상 작성해 주세요.")
-    with transaction() as c:
-        cur = c.execute(
-            """UPDATE student_pin_approvals
-               SET status='REJECTED',approval_code_hash=NULL,
-                   reviewed_at=?,reviewed_by=?,review_reason=?
-               WHERE student_id=? AND status='PENDING'""",
-            (now(),actor,reason,student)
-        )
-        if not cur.rowcount:
-            raise HTTPException(409,"승인 대기 중인 PIN 신청이 아닙니다.")
-        c.execute(
-            "INSERT INTO student_pin_review_log(student_id,action,actor,reason,created_at) VALUES(?,'REJECTED',?,?,?)",
-            (student,actor,reason,now())
-        )
-    return {"ok":True,"student_id":student,"approval_status":"REJECTED"}
 
 
 class PolicyRequest(BaseModel):
@@ -652,17 +489,12 @@ def student_record(student_id: str,request: Request):
     student=validate_student(student_id)
     with connect() as c:
         usage=month_usage(c,student)
-        pin_status=c.execute(
-            """SELECT p.locked_until,p.updated_at,a.status AS approval_status
-               FROM student_pins p LEFT JOIN student_pin_approvals a
-               ON a.student_id=p.student_id WHERE p.student_id=?""",(student,)
-        ).fetchone()
+        pin_status=c.execute("SELECT locked_until,updated_at FROM student_pins WHERE student_id=?",(student,)).fetchone()
         umbrella=c.execute("SELECT id,status FROM umbrellas WHERE borrower=?",(student,)).fetchone()
         penalties=c.execute("""SELECT id,student_id,umbrella_id,code,points,reason,actor,created_at,reverses_id
           FROM penalty_actions WHERE student_id=? ORDER BY id DESC LIMIT 200""",(student,)).fetchall()
         total=penalty_total(c,student)
     return {"student_id":student,"usage":usage,"has_pin":bool(pin_status),
-        "pin_approval_status":(pin_status["approval_status"] or "PENDING") if pin_status else "NOT_REGISTERED",
         "pin_locked":bool(pin_status and pin_status["locked_until"]>int(time.time())),
         "active_umbrella":uid(umbrella["id"]) if umbrella else None,
         "penalty_points":total,
@@ -1182,11 +1014,6 @@ def export(request: Request):
         policies = c.execute("SELECT key,value FROM policies ORDER BY key").fetchall()
         allowances = c.execute("SELECT * FROM student_allowances ORDER BY month,student_id").fetchall()
         penalties = c.execute("SELECT * FROM penalty_actions ORDER BY id").fetchall()
-        pin_approvals = c.execute(
-            """SELECT student_id,status,requested_at,reviewed_at,reviewed_by,review_reason
-               FROM student_pin_approvals ORDER BY student_id"""
-        ).fetchall()
-        pin_reviews = c.execute("SELECT * FROM student_pin_review_log ORDER BY id").fetchall()
         stocktake_sessions = c.execute("SELECT * FROM stocktake_sessions ORDER BY id").fetchall()
         stocktake_items = c.execute("SELECT * FROM stocktake_items ORDER BY session_id,umbrella_id").fetchall()
         umbrella_locations = c.execute("SELECT * FROM umbrella_locations ORDER BY umbrella_id").fetchall()
@@ -1198,8 +1025,6 @@ def export(request: Request):
         "policies":[dict(p) for p in policies],
         "student_allowances":[dict(a) for a in allowances],
         "penalty_actions":[dict(p) for p in penalties],
-        "student_pin_approvals":[dict(a) for a in pin_approvals],
-        "student_pin_review_log":[dict(r) for r in pin_reviews],
         "umbrella_locations":[dict(loc) for loc in umbrella_locations],
         "stocktake_sessions":[dict(sess) for sess in stocktake_sessions],
         "stocktake_items":[dict(item) for item in stocktake_items]
