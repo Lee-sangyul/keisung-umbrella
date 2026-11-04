@@ -163,14 +163,13 @@
    </div>
    <p id="studentPenaltyBreakdown" class="policy-breakdown" aria-live="polite"></p>
    <div class="pin-admin-box">
-    <h3>학생 PIN 발급·재발급</h3>
+    <h3>학생 PIN 상태 및 재발급</h3>
     <p id="studentPinStatus" class="helper">PIN 상태 확인 중</p>
-    <p class="helper">학생 본인을 직접 확인한 후 발급하세요. 새 PIN은 숫자 6자리이며, 재발급하면 이전 PIN은 즉시 무효가 됩니다.</p>
+    <p class="helper">PIN이 없는 학생은 키오스크에서 학년·반·번호 선택 후 직접 PIN을 만들 수 있습니다. 이미 설정한 PIN을 잊었을 때만 담당 교사가 신원을 확인한 뒤 재발급해 주세요.</p>
     <label class="confirm-penalty"><input type="checkbox" id="studentPinVerified"> 담당 교사가 학생의 신원을 직접 확인했습니다.</label>
-    <div class="actions"><button type="button" class="btn primary" id="issueStudentSetupCode">학생 직접 설정용 등록코드 발급</button><button type="button" class="btn" id="issueStudentPin">관리자 PIN 발급 / 재발급</button><button type="button" class="btn hide" id="hideStudentPin">PIN 숨기기</button></div>
-    <div id="studentSetupCodeOutput" class="pin-secret hide" role="status" aria-live="polite"></div>
+    <div class="actions"><button type="button" class="btn primary" id="issueStudentPin">관리자 PIN 발급 / 재발급</button><button type="button" class="btn hide" id="hideStudentPin">PIN 숨기기</button></div>
     <div id="studentPinOutput" class="pin-secret hide" role="status" aria-live="polite"></div>
-    <p class="helper">처음 설정하는 학생에게는 <strong>10자리 1회용 등록코드(15분 유효)</strong>만 전달하고, 학생이 키오스크에서 직접 6자리 PIN을 정하게 하세요. 이미 PIN이 있는 학생은 등록코드로 덮어쓸 수 없으며 관리자 재발급을 이용해야 합니다. 코드와 PIN을 다른 사람에게 공개하지 마세요.</p>
+    <p class="helper">최초 PIN 설정에는 별도 코드가 필요하지 않습니다. 단, 다른 학생의 번호를 선점하는 문제가 생길 수 있으므로 첫 설정은 담당 교사 지도 아래 진행하세요.</p>
    </div>
    <div class="allowance-row">
     <div class="field"><label for="extraAllowance">이번 달 추가 대여 허용 횟수</label><input class="input" id="extraAllowance" type="number" min="0" max="100" value="0"></div>
@@ -262,7 +261,7 @@ $("loginForm").onsubmit=async ev=>{
 };
 $("logout").onclick=async()=>{
  try{await api("/api/admin/logout",{method:"POST",auth:true});}catch(e){console.warn(e);}
- csrf="";inventory=[];events=[];$("studentPinOutput").textContent="";$("studentSetupCodeOutput").textContent="";show(false);
+ csrf="";inventory=[];events=[];$("studentPinOutput").textContent="";show(false);
 };
 $("refresh").onclick=async()=>{try{await refresh();}catch(e){alert("새로고침 실패: "+e.message);}};
 // Student lookup uses admin-authenticated inventory data only.
@@ -380,12 +379,9 @@ async function loadPolicyStudent(id){
   $("studentPenaltyBreakdown").textContent="기본 "+data.usage.limit+"회 + 추가 "+data.usage.extra+"회 − 이번 달 패널티 "+data.usage.penalty_deduction+"회 = 실제 한도 "+data.usage.effective_limit+"회";
   $("studentPenaltyPoints").textContent=data.penalty_points+"점";
   $("extraAllowance").value=data.usage.extra;
-  $("studentPinStatus").textContent=data.has_pin?(data.pin_locked?"PIN 등록됨 · 인증 시도 잠김 (15분 대기 또는 재발급)":"PIN 등록 완료"):(data.setup_code_pending?"PIN 미설정 · 학생용 등록코드 발급됨 (15분 유효)":"PIN 미설정 · 등록코드 발급 또는 관리자 직접 발급 필요");
-  $("issueStudentSetupCode").disabled=Boolean(data.has_pin);
+  $("studentPinStatus").textContent=data.has_pin?(data.pin_locked?"PIN 등록됨 · 인증 시도 잠김 (15분 대기 또는 재발급)":"PIN 등록 완료"):"PIN 미설정 · 키오스크에서 학생이 직접 설정 가능";
   $("studentPinOutput").classList.add("hide");
   $("studentPinOutput").textContent="";
-  $("studentSetupCodeOutput").textContent="";
-  $("studentSetupCodeOutput").classList.add("hide");
   $("studentPinVerified").checked=false;
   $("hideStudentPin").classList.add("hide");
   const undone=new Set(data.penalties.filter(x=>x.reverses_id!==null).map(x=>x.reverses_id));
@@ -396,22 +392,6 @@ async function loadPolicyStudent(id){
   policyMessage("studentPolicyMessage",id+" 학생 정보를 불러왔습니다.");
  }catch(e){policyMessage("studentPolicyMessage","학생 조회 실패: "+e.message,true);}
 }
-$("issueStudentSetupCode").onclick=async()=>{
- if(!selectedPolicyStudent)return policyMessage("studentPolicyMessage","학생을 먼저 조회해 주세요.",true);
- if(policyRecord?.has_pin)return policyMessage("studentPolicyMessage","이미 PIN이 설정된 학생입니다. 재발급 기능을 사용하세요.",true);
- if(!$("studentPinVerified").checked)return policyMessage("studentPolicyMessage","학생 신원 확인에 체크해 주세요.",true);
- if(!confirm(selectedPolicyStudent+" 학생에게 15분짜리 PIN 설정코드를 발급할까요?\n이전 설정코드는 무효가 됩니다."))return;
- const button=$("issueStudentSetupCode");button.disabled=true;
- try{
-  const response=await api("/api/admin/student-pin/setup-code",{method:"POST",auth:true,body:{student_id:selectedPolicyStudent,verified_identity:true}});
-  $("studentSetupCodeOutput").textContent=response.student_id+" · 등록코드: "+response.enrollment_code+" (15분 유효)";
-  $("studentSetupCodeOutput").classList.remove("hide");
-  $("studentPinVerified").checked=false;
-  $("studentPinStatus").textContent="학생용 PIN 등록코드 발급 완료 · 15분 내에 키오스크에서 설정하세요.";
-  policyMessage("studentPolicyMessage","학생 설정용 등록코드를 발급했습니다. 본인에게만 전달해 주세요.");
- }catch(e){policyMessage("studentPolicyMessage","등록코드 발급 실패: "+e.message,true);}
- finally{button.disabled=Boolean(policyRecord?.has_pin);}
-};
 $("issueStudentPin").onclick=async()=>{
  if(!selectedPolicyStudent)return policyMessage("studentPolicyMessage","학생을 먼저 조회해 주세요.",true);
  if(!$("studentPinVerified").checked)return policyMessage("studentPolicyMessage","학생 신원 확인을 체크해 주세요.",true);
@@ -419,9 +399,6 @@ $("issueStudentPin").onclick=async()=>{
  const button=$("issueStudentPin");button.disabled=true;
  try{
   const response=await api("/api/admin/student-pin",{method:"POST",auth:true,body:{student_id:selectedPolicyStudent,verified_identity:true}});
-  $("studentSetupCodeOutput").textContent="";
-  $("studentSetupCodeOutput").classList.add("hide");
-  $("issueStudentSetupCode").disabled=true;
   $("studentPinOutput").textContent=response.student_id+" · 새 PIN: "+response.pin;
   $("studentPinOutput").classList.remove("hide");
   $("hideStudentPin").classList.remove("hide");
@@ -434,7 +411,6 @@ $("issueStudentPin").onclick=async()=>{
 };
 $("hideStudentPin").onclick=()=>{
  $("studentPinOutput").textContent="";$("studentPinOutput").classList.add("hide");$("hideStudentPin").classList.add("hide");
- $("studentSetupCodeOutput").textContent="";$("studentSetupCodeOutput").classList.add("hide");
 };
 $("saveAllowance").onclick=async()=>{
  if(!selectedPolicyStudent)return;
