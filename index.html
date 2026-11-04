@@ -361,6 +361,70 @@ async function exportJson(){
 }
 $("download").onclick=exportJson;$("settingsExport").onclick=exportJson;
 
+
+let loadingPinRequests=false;
+function pinApprovalMessage(msg,error=false){
+ const el=$("pinRequestsMessage");
+ el.className="msg"+(error?" error":"");
+ el.textContent=msg;
+}
+async function loadPinRequests(){
+ if(!csrf||loadingPinRequests)return;
+ loadingPinRequests=true;
+ try{
+  const data=await api("/api/admin/student-pin/requests");
+  $("pinPendingCount").textContent=String(data.pending_count);
+  $("pinPendingCount").classList.toggle("hide",data.pending_count===0);
+  $("pinRequestRows").innerHTML=data.requests.map(row=>{
+   const student=esc(row.student_id),date=esc(new Date(row.requested_at).toLocaleString("ko-KR"));
+   return '<tr><td><strong>'+student+'</strong></td><td>'+date+'</td><td>'+
+    (row.has_approval_code?
+     '<div class="pin-approval-tools"><input class="input" type="text" inputmode="text" maxlength="8" spellcheck="false" autocomplete="off" aria-label="'+student+' 신청 확인 코드" placeholder="8자리 코드" data-code="'+student+'">'+
+     '<label class="pin-approval-verified"><input type="checkbox" data-verified="'+student+'">대면 신원 확인 완료</label></div>':
+     '<span class="helper">기존 신청 · 확인 코드 없음</span>')+'</td><td><div class="pin-approval-tools">'+
+    (row.has_approval_code?'<button type="button" class="btn primary" data-approve="'+student+'">승인</button>':
+       '<button type="button" class="btn" data-reissue="'+student+'">관리자 재발급</button>')+
+    '<button type="button" class="btn danger" data-reject="'+student+'">반려</button></div></td></tr>';
+  }).join("")||empty(4,"승인을 기다리는 PIN 신청이 없습니다.");
+  for(const button of $("pinRequestRows").querySelectorAll("[data-approve]"))button.onclick=()=>approvePinRequest(button.dataset.approve);
+  for(const button of $("pinRequestRows").querySelectorAll("[data-reject]"))button.onclick=()=>rejectPinRequest(button.dataset.reject);
+  for(const button of $("pinRequestRows").querySelectorAll("[data-reissue]"))button.onclick=async()=>{
+   const id=button.dataset.reissue,parts=id.split("-");
+   $("penaltyGrade").value=parts[0];$("penaltyClass").value=parts[1];$("penaltyNumber").value=parts[2];
+   changeTab("studentPolicy");
+   await loadPolicyStudent(id);
+  };
+ }catch(error){pinApprovalMessage("신청 목록 불러오기 실패: "+error.message,true);}
+ finally{loadingPinRequests=false;}
+}
+async function approvePinRequest(student){
+ const codeInput=$("pinRequestRows").querySelector('[data-code="'+student+'"]');
+ const checked=$("pinRequestRows").querySelector('[data-verified="'+student+'"]');
+ const code=(codeInput?.value||"").trim().toUpperCase();
+ if(!checked?.checked)return pinApprovalMessage("학생 "+student+"의 신원을 직접 확인한 후 체크해 주세요.",true);
+ if(!/^[A-HJ-NP-Z2-9]{8}$/.test(code))return pinApprovalMessage("학생에게 받은 8자리 신청 확인 코드를 입력해 주세요.",true);
+ if(!confirm(student+" 학생의 신원과 신청 확인 코드를 대조했습니까?\n승인하면 등록된 PIN으로 즉시 대여할 수 있습니다."))return;
+ try{
+  await api("/api/admin/student-pin/requests/"+encodeURIComponent(student)+"/approve",
+    {method:"POST",auth:true,body:{verified_identity:true,approval_code:code}});
+  pinApprovalMessage(student+" 학생 PIN 신청을 승인했습니다.");
+  await loadPinRequests();
+ }catch(error){pinApprovalMessage("승인 실패: "+error.message,true);}
+}
+async function rejectPinRequest(student){
+ const reason=prompt(student+" 학생의 PIN 신청을 반려하는 이유를 입력해 주세요 (5자 이상).\n반려 후에는 관리자 PIN 재발급으로 다시 사용할 수 있습니다.");
+ if(reason===null)return;
+ if(reason.trim().length<5)return pinApprovalMessage("반려 사유는 5자 이상 작성해 주세요.",true);
+ if(!confirm(student+" 학생의 신청을 반려하시겠습니까?\n해당 학생은 PIN을 사용할 수 없게 됩니다."))return;
+ try{
+  await api("/api/admin/student-pin/requests/"+encodeURIComponent(student)+"/reject",
+    {method:"POST",auth:true,body:{reason:reason.trim()}});
+  pinApprovalMessage(student+" 학생의 신청을 반려했습니다. 기록은 보관됩니다.");
+  await loadPinRequests();
+ }catch(error){pinApprovalMessage("반려 실패: "+error.message,true);}
+}
+$("refreshPinRequests").onclick=loadPinRequests;
+
 const POLICY_CODES={LOST:"분실",ACCIDENTAL_DAMAGE:"과실 파손",INTENTIONAL_DAMAGE:"고의 파손",WARNING:"경고",REVERSAL:"패널티 취소"};
 let selectedPolicyStudent="",policyRecord=null;
 for(const [id,max,label] of [["penaltyGrade",6,"학년"],["penaltyClass",4,"반"],["penaltyNumber",36,"번"]]){
