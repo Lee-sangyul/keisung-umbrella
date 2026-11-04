@@ -73,6 +73,14 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 
 .mark{background:transparent;overflow:hidden;border-radius:18px}
 .mark img{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}
+
+/* Consistent, scaling icons for student kiosk */
+.ui-icon{display:block;width:100%;height:100%;max-width:100%;max-height:100%;stroke-linecap:round;stroke-linejoin:round}
+.choice .symbol{display:flex;align-items:center;justify-content:center;width:clamp(68px,7vw,116px);height:clamp(68px,7vw,116px);font-size:0;flex:none}
+.choice .symbol .ui-icon{width:100%;height:100%}
+.qr-icon{display:flex;align-items:center;justify-content:center;width:clamp(62px,6.8vw,112px);height:clamp(62px,6.8vw,112px);font-size:0;color:#ff6541;flex:none}
+.qr-icon .ui-icon{width:100%;height:100%}
+@media(max-width:550px){.choice .symbol{width:65px;height:65px}.qr-icon{width:75px;height:75px}}
 </style></head>
 <body>
 <div class="shell">
@@ -83,7 +91,7 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
  <main>
   <section class="page active" id="welcome"><div class="center">
    <p class="eyebrow">KEISUNG UMBRELLA</p><h1>우산이 필요하신가요?</h1><p class="sub">버튼을 눌러 대여 또는 반납을 시작해 주세요.</p>
-   <div class="choice-grid"><button class="choice borrow" id="startBorrow"><span class="symbol">☂</span><strong>우산 빌리기</strong><small>QR 인식 후 간편 대여</small></button><button class="choice return" id="startReturn"><span class="symbol">↩</span><strong>우산 반납하기</strong><small>빌린 우산을 돌려주세요</small></button></div>
+   <div class="choice-grid"><button class="choice borrow" id="startBorrow"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M9 30C12 17 21 10 32 10s20 7 23 20c-5-3-10-3-15 0-5-3-11-3-16 0-5-3-10-3-15 0Z" stroke="currentColor" stroke-width="3.8" stroke-linejoin="round"/><path d="M32 30v19c0 5 3 8 7 8s7-3 7-7" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/><path d="M32 5v5" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></svg></span><strong>우산 빌리기</strong><small>QR 인식 후 간편 대여</small></button><button class="choice return" id="startReturn"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M22 16 10 28l12 12M11 28h24c11 0 18 7 18 17 0 8-5 14-13 14H27" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><strong>우산 반납하기</strong><small>빌린 우산을 돌려주세요</small></button></div>
   </div></section>
   <section class="page" id="student"><div class="progress"><span class="current"></span><span></span><span></span></div>
    <h2 class="step-title">학생 정보를 선택해 주세요</h2><p class="step-sub">학년 · 반 · 번호를 순서대로 눌러 주세요.</p>
@@ -91,7 +99,7 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
   </section>
   <section class="page" id="qr"><div class="progress"><span class="current"></span><span class="current"></span><span></span></div>
    <h2 class="step-title">우산 QR 코드를 인식해 주세요</h2><p class="step-sub">우산에 붙은 QR을 스캔하거나 우산 ID를 입력할 수 있어요.</p>
-   <div class="center"><div class="qr-area"><div class="scanbox"><span class="qr-icon">▦</span><strong>QR 코드 스캔</strong><p>카메라로 우산 코드를 비춰 주세요.</p><button id="scan">QR 스캔 시작</button></div><div class="manualbox"><span class="qr-icon">⌨</span><strong>직접 입력</strong><p>우산 스티커의 ID를 입력해 주세요.</p><input id="umbrella" placeholder="UMB-0001" maxlength="30" autocomplete="off" spellcheck="false" aria-label="우산 ID"></div></div></div>
+   <div class="center"><div class="qr-area"><div class="scanbox"><span class="qr-icon"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M9 23V12a3 3 0 0 1 3-3h11M41 9h11a3 3 0 0 1 3 3v11M55 41v11a3 3 0 0 1-3 3H41M23 55H12a3 3 0 0 1-3-3V41" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><rect x="20" y="20" width="10" height="10" rx="2" stroke="currentColor" stroke-width="3"/><path d="M37 20h7v7h-7zM20 37h8v8h-8zM37 38v7h8M46 35h-4" stroke="currentColor" stroke-width="3" stroke-linejoin="round"/></svg></span><strong>QR 코드 스캔</strong><p>카메라로 우산 코드를 비춰 주세요.</p><button id="scan">QR 스캔 시작</button></div><div class="manualbox"><span class="qr-icon"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><rect x="7" y="16" width="50" height="32" rx="6" stroke="currentColor" stroke-width="3.5"/><path d="M17 26h3m8 0h3m8 0h3M17 34h3m8 0h3m8 0h3M22 42h20" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/></svg></span><strong>직접 입력</strong><p>우산 스티커의 ID를 입력해 주세요.</p><input id="umbrella" placeholder="UMB-0001" maxlength="30" autocomplete="off" spellcheck="false" aria-label="우산 ID"></div></div></div>
   </section>
   <section class="page" id="review"><div class="progress"><span class="current"></span><span class="current"></span><span class="current"></span></div>
    <div class="center"><p class="eyebrow">마지막 단계</p><h1>정보가 맞는지 확인해 주세요</h1><p class="sub">다른 학생의 정보를 입력하면 안 돼요.</p>
