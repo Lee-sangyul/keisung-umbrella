@@ -92,7 +92,7 @@ def test_scoped_stocktake_batch_duplicates_export_and_no_inventory_mutation(clie
     assert inventory_before == inventory_after
     assert client.get("/api/admin/stocktakes").json()["sessions"][0]["id"] == sid
     backup = client.get("/api/admin/export").json()
-    assert backup["schema_version"] == "3.2"
+    assert backup["schema_version"] == "3.3"
     assert len(backup["umbrella_locations"]) == 3
     assert len(backup["stocktake_sessions"]) == 1
     assert len(backup["stocktake_items"]) == 3
