@@ -19,7 +19,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent
-load_dotenv(ROOT / ".env")  # Local secrets; existing host environment takes precedence.
+load_dotenv(ROOT / ".env", override=True)  # .env is authoritative for this single-instance MVP.
 DATA_DIR = Path(os.getenv("DATA_DIR", str(ROOT / "data"))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "umbrellas.db"
@@ -31,8 +31,8 @@ STATES = {"AVAILABLE", "BORROWED", "LOST", "DAMAGED", "DISPOSED"}
 ID_RE = re.compile(r"^UMB-\d{4,}$")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-if not ADMIN_USERNAME or len(ADMIN_PASSWORD) < 12:
-    raise RuntimeError("Set ADMIN_USERNAME and ADMIN_PASSWORD (12+ characters) in environment before starting.")
+if not ADMIN_USERNAME or len(ADMIN_PASSWORD) < 12 or ADMIN_PASSWORD.startswith("CHANGE_ME"):
+    raise RuntimeError("Set ADMIN_USERNAME and a real ADMIN_PASSWORD (12+ characters) in .env before starting.")
 
 
 def password_hash(password: str, salt: bytes) -> bytes:
