@@ -65,6 +65,9 @@
 #studentPolicyDetail>h3{font-size:18px;margin:20px 0}
 @media(max-width:900px){.student-policy-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:450px){.student-policy-stats{gap:7px}.student-policy-card{padding:12px}.student-policy-card strong{font-size:20px}}
+.batch-register-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
+.batch-register-form .field{width:min(270px,100%)}
+.batch-register-form .btn{min-height:45px}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -108,6 +111,16 @@
  <div id="studentResult" class="lookup-result hide" role="status"></div>
  </div>
  <div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>상태</th><th>대여 학생</th><th>관리 · 인쇄</th></tr></thead><tbody id="inventoryRows"></tbody></table></div>
+      </section>
+      <section class="panel" id="batchRegisterCard">
+        <div class="head"><div><h2 class="section-title">우산 일괄 등록</h2><p class="subtext">수량만 입력하면 새로운 우산 ID를 자동 발급합니다. 한 번에 최대 500개까지 가능합니다.</p></div></div>
+        <div class="batch-register-form">
+          <div class="field"><label for="batchCount">등록 수량 (1~500개)</label><input class="input" type="number" id="batchCount" min="1" max="500" step="1" value="20" required></div>
+          <button type="button" class="btn primary" id="batchRegister">＋ 일괄 등록하기</button>
+        </div>
+        <p class="helper">기존 우산과 ID가 겹치지 않습니다. 한 번 등록하면 취소하거나 ID를 재사용할 수 없으니 수량을 확인하세요.</p>
+        <div id="batchResult" class="msg hide" role="status"></div>
+        <div class="actions"><a id="batchPrintLink" class="btn primary hide" href="/admin/print">▦ 방금 등록한 QR만 일괄 인쇄</a></div>
       </section>
       <section class="panel" id="manageCard"><div class="head"><div><h2 class="section-title">상태 변경</h2><p class="subtext">분실·파손·폐기 처리 또는 복구</p></div></div>
         <div class="formgrid"><div class="field"><label for="adminId">우산 ID</label><select id="adminId"></select></div><div class="field"><label for="state">변경할 상태</label><select id="state"><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="AVAILABLE">대여 가능으로 복구</option></select></div><div class="field wide"><label for="reason">사유 (선택)</label><input class="input" id="reason" maxlength="160" placeholder="예: 1층 우산함에서 발견"></div></div>
@@ -269,6 +282,24 @@ $("register").onclick=async()=>{
  if(busy||!confirm("새 우산을 등록하시겠습니까?\n발급된 ID는 삭제하거나 재사용할 수 없습니다."))return;
  busy=true;try{const r=await api("/api/admin/umbrellas",{method:"POST",auth:true});await refresh();$("adminId").value=r.id;message(r.id+" 등록 완료!");$("manageCard").scrollIntoView({behavior:"smooth",block:"center"});}
  catch(e){message(e.message,true);}finally{busy=false;}
+};
+$("batchRegister").onclick=async()=>{
+ if(busy)return;
+ const count=Number($("batchCount").value);
+ const result=$("batchResult"),link=$("batchPrintLink");
+ if(!Number.isInteger(count)||count<1||count>500){
+  result.className="msg error";result.textContent="등록 수량은 1~500 사이의 정수여야 합니다.";return;
+ }
+ if(!confirm("우산 "+count+"개를 일괄 등록할까요?\\n등록된 ID는 취소하거나 재사용할 수 없습니다."))return;
+ busy=true;$("batchRegister").disabled=true;link.classList.add("hide");result.className="msg";result.textContent="우산 "+count+"개를 등록하고 있습니다.";
+ try{
+  const response=await api("/api/admin/umbrellas/batch",{method:"POST",auth:true,body:{count}});
+  result.textContent=response.count+"개 등록 완료! 신규 ID: "+response.first_id+" ~ "+response.last_id;
+  link.href="/admin/print?batch_start="+encodeURIComponent(response.first_id)+"&batch_end="+encodeURIComponent(response.last_id);
+  link.classList.remove("hide");
+  await refresh();
+ }catch(error){result.className="msg error";result.textContent="일괄 등록 실패: "+error.message;}
+ finally{busy=false;$("batchRegister").disabled=false;}
 };
 $("change").onclick=async()=>{
  if(busy)return;
