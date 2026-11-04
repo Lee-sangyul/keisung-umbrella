@@ -556,6 +556,17 @@ def export(request: Request):
     with connect() as c:
         rows = c.execute("SELECT id,status,borrower,rental_id FROM umbrellas ORDER BY id").fetchall()
         events = c.execute("SELECT * FROM events ORDER BY seq").fetchall()
-    payload = {"schema_version":"2.0","umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],"events":[dict(e) for e in events]}
+        policies = c.execute("SELECT key,value FROM policies ORDER BY key").fetchall()
+        allowances = c.execute("SELECT * FROM student_allowances ORDER BY month,student_id").fetchall()
+        penalties = c.execute("SELECT * FROM penalty_actions ORDER BY id").fetchall()
+    payload = {
+        "schema_version":"3.0",
+        "exported_at":now(),
+        "umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],
+        "events":[dict(e) for e in events],
+        "policies":[dict(p) for p in policies],
+        "student_allowances":[dict(a) for a in allowances],
+        "penalty_actions":[dict(p) for p in penalties]
+    }
     return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="umbrella-backup.json"', "Cache-Control":"no-store"})
