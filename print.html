@@ -153,7 +153,7 @@ async function init(){
   const params=new URLSearchParams(location.search);
   const requested=params.get("umbrella");
   const first=params.get("batch_start"),last=params.get("batch_end");
-  if(first&&last&&/^UMB-\\d{4,}$/.test(first)&&/^UMB-\\d{4,}$/.test(last)){
+  if(first&&last&&/^UMB-\d{4,}$/.test(first)&&/^UMB-\d{4,}$/.test(last)){
    const start=Number(first.slice(4)),end=Number(last.slice(4));
    if(start<=end&&end-start<500){
     inventory.filter(x=>{const id=Number(x.id.slice(4));return id>=start&&id<=end;}).forEach(x=>selected.add(x.id));
