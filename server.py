@@ -10,12 +10,16 @@ import time
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
+
+from dotenv import load_dotenv
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 ROOT = Path(__file__).resolve().parent
+load_dotenv(ROOT / ".env")  # Local secrets; existing host environment takes precedence.
 DATA_DIR = Path(os.getenv("DATA_DIR", str(ROOT / "data"))).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "umbrellas.db"
@@ -122,14 +126,30 @@ def log(c, umbrella_id, action, student=None, rental=None, actor="system", reaso
 
 
 def verify_origin(request: Request):
-    # Protect cookie-based writes from cross-site requests, including login.
+    """Same-origin protection that works behind Codespaces' HTTPS reverse proxy.
+
+    Compare the browser's Origin against the public Host header. Do not blindly
+    trust arbitrary X-Forwarded-Host or X-Forwarded-Proto headers.
+    APP_ORIGIN can explicitly allow a public reverse-proxy origin if Host differs.
+    """
     origin = request.headers.get("origin", "")
-    if APP_ORIGIN:
-        expected = APP_ORIGIN
-    else:
-        expected = str(request.base_url).rstrip("/")
-    if origin != expected:
+    parsed = urlsplit(origin)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise HTTPException(403, "요청 출처가 올바르지 않습니다.")
+    if parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise HTTPException(403, "요청 출처가 올바르지 않습니다.")
+    if parsed.scheme == "http" and parsed.hostname not in {"localhost", "127.0.0.1", "::1"}:
+        raise HTTPException(403, "외부 접속은 HTTPS를 사용해야 합니다.")
+
+    requested_host = request.headers.get("host", "").lower()
+    trusted_origins = set()
+    if requested_host:
+        trusted_origins.add(f"{parsed.scheme}://{requested_host}")
+    if APP_ORIGIN:
+        trusted_origins.add(APP_ORIGIN.lower())
+
+    if origin.lower().rstrip("/") not in trusted_origins:
+        raise HTTPException(403, "요청 출처가 올바르지 않습니다. .env의 APP_ORIGIN을 실제 접속 주소로 확인하세요.")
 
 
 def require_admin(request: Request, csrf=False):
@@ -167,7 +187,7 @@ class StatusRequest(BaseModel):
 
 @app.get("/", include_in_schema=False)
 def home():
-    return FileResponse(ROOT / "index.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(ROOT / "kiosk.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/admin", include_in_schema=False)
@@ -231,7 +251,8 @@ def login(data: LoginRequest, request: Request, response: Response):
         c.execute("DELETE FROM sessions WHERE expires_at < ?", (int(time.time()),))
         c.execute("INSERT INTO sessions(token_hash,username,csrf,expires_at) VALUES(?,?,?,?)",
                   (hashlib.sha256(raw.encode()).hexdigest(), data.username, csrf, int(time.time()) + 8*3600))
-    response.set_cookie(COOKIE, raw, httponly=True, secure=SECURE_COOKIES,
+    response.set_cookie(COOKIE, raw, httponly=True,
+                        secure=SECURE_COOKIES or urlsplit(request.headers.get("origin", "")).scheme == "https",
                         samesite="strict", max_age=8*3600, path="/")
     return {"ok": True, "username": data.username, "csrf": csrf}
 
