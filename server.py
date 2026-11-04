@@ -37,13 +37,6 @@ SEOUL = ZoneInfo("Asia/Seoul")
 STUDENT_RE = re.compile(r"^[1-6]-[1-4]-(?:[1-9]|[12][0-9]|3[0-6])$")
 PENALTY_POINTS = {"LOST": 3, "ACCIDENTAL_DAMAGE": 1, "INTENTIONAL_DAMAGE": 5, "WARNING": 0}
 ID_RE = re.compile(r"^UMB-\d{4,}$")
-SENSOR_API_TOKEN = os.getenv("SENSOR_API_TOKEN", "").strip()
-if SENSOR_API_TOKEN and (len(SENSOR_API_TOKEN) < 32 or SENSOR_API_TOKEN.startswith("CHANGE_ME")):
-    raise RuntimeError("SENSOR_API_TOKEN must be a random secret (32+ characters).")
-SENSOR_DROP_MIN_GRAMS = int(os.getenv("SENSOR_DROP_MIN_GRAMS", "150"))
-if not 50 <= SENSOR_DROP_MIN_GRAMS <= 2000:
-    raise RuntimeError("SENSOR_DROP_MIN_GRAMS must be between 50 and 2000.")
-
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "").strip()
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 if not ADMIN_USERNAME or len(ADMIN_PASSWORD) < 12 or ADMIN_PASSWORD.startswith("CHANGE_ME"):
@@ -116,32 +109,6 @@ def init_db():
             locked_until INTEGER NOT NULL DEFAULT 0,
             updated_at TEXT NOT NULL,
             updated_by TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS security_alerts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            source TEXT NOT NULL,
-            rack_id TEXT NOT NULL,
-            detail TEXT NOT NULL,
-            drop_grams REAL,
-            status TEXT NOT NULL DEFAULT 'OPEN',
-            created_at TEXT NOT NULL,
-            resolved_at TEXT,
-            resolved_by TEXT,
-            resolution TEXT
-        );
-        CREATE INDEX IF NOT EXISTS alerts_status_idx ON security_alerts(status,id);
-        CREATE TABLE IF NOT EXISTS rack_weights (
-            rack_id TEXT PRIMARY KEY,
-            weight_grams REAL NOT NULL,
-            updated_at TEXT NOT NULL
-        );
-        CREATE TABLE IF NOT EXISTS sensor_reports (
-            event_id TEXT PRIMARY KEY,
-            rack_id TEXT NOT NULL,
-            weight_grams REAL NOT NULL,
-            matched_borrow_seq INTEGER UNIQUE REFERENCES events(seq),
-            alert_id INTEGER REFERENCES security_alerts(id),
-            created_at TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS policies (
             key TEXT PRIMARY KEY,
@@ -727,105 +694,6 @@ def change_state(umbrella_id: str, data: StatusRequest, request: Request):
 
 
 
-
-class ManualSecurityReport(BaseModel):
-    rack_id: str = Field(min_length=1,max_length=32,pattern=r"^[A-Za-z0-9_-]+$")
-    detail: str = Field(min_length=5,max_length=500)
-
-
-class ResolveSecurityAlert(BaseModel):
-    resolution: str = Field(min_length=5,max_length=500)
-
-
-class SensorWeightReport(BaseModel):
-    event_id: str = Field(min_length=8,max_length=64,pattern=r"^[A-Za-z0-9_-]+$")
-    rack_id: str = Field(min_length=1,max_length=32,pattern=r"^[A-Za-z0-9_-]+$")
-    weight_grams: float = Field(ge=0,le=1000000,allow_inf_nan=False)
-
-
-@app.get("/api/admin/security-alerts")
-def get_security_alerts(request: Request):
-    require_admin(request)
-    with connect() as c:
-        rows=c.execute(
-            "SELECT * FROM security_alerts ORDER BY CASE WHEN status='OPEN' THEN 0 ELSE 1 END,id DESC LIMIT 200"
-        ).fetchall()
-        count=c.execute("SELECT COUNT(*) FROM security_alerts WHERE status='OPEN'").fetchone()[0]
-    return {"open_count":count,"alerts":[dict(r) for r in rows],
-            "sensor_enabled":bool(SENSOR_API_TOKEN)}
-
-
-@app.post("/api/admin/security-alerts")
-def manual_security_alert(data: ManualSecurityReport,request: Request):
-    actor=require_admin(request,csrf=True)
-    with transaction() as c:
-        cur=c.execute(
-            "INSERT INTO security_alerts(source,rack_id,detail,created_at) VALUES('ADMIN_REPORT',?,?,?)",
-            (data.rack_id,data.detail,now()))
-        alert_id=cur.lastrowid
-    return {"ok":True,"id":alert_id,"reported_by":actor}
-
-
-@app.post("/api/admin/security-alerts/{alert_id}/resolve")
-def resolve_security_alert(alert_id: int,data: ResolveSecurityAlert,request: Request):
-    actor=require_admin(request,csrf=True)
-    with transaction() as c:
-        cur=c.execute(
-            "UPDATE security_alerts SET status='RESOLVED',resolved_at=?,resolved_by=?,resolution=? WHERE id=? AND status='OPEN'",
-            (now(),actor,data.resolution,alert_id))
-        if not cur.rowcount:
-            raise HTTPException(409,"이미 처리되었거나 존재하지 않는 알림입니다.")
-    return {"ok":True,"id":alert_id}
-
-
-@app.post("/api/sensor/weight")
-def sensor_weight_report(data: SensorWeightReport,request: Request):
-    """Future sensor integration: stable rack readings only, never proof of theft."""
-    if not SENSOR_API_TOKEN:
-        raise HTTPException(503,"센서 연동이 비활성화되어 있습니다.")
-    if not hmac.compare_digest(request.headers.get("x-sensor-token",""),SENSOR_API_TOKEN):
-        raise HTTPException(401,"등록되지 않은 센서입니다.")
-    with transaction() as c:
-        prior_report=c.execute("SELECT alert_id FROM sensor_reports WHERE event_id=?",
-                               (data.event_id,)).fetchone()
-        if prior_report is not None:
-            return {"ok":True,"duplicate":True,"alert_id":prior_report["alert_id"]}
-        prior=c.execute("SELECT weight_grams FROM rack_weights WHERE rack_id=?",
-                        (data.rack_id,)).fetchone()
-        drop=(prior["weight_grams"]-data.weight_grams) if prior else 0
-        alert_id=None
-        matched_seq=None
-        result="BASELINE" if prior is None else "NO_REMOVAL"
-        if drop>=SENSOR_DROP_MIN_GRAMS:
-            # Existing checkout events have no rack ID. This is best-effort matching.
-            cutoff=(datetime.now(timezone.utc)-timedelta(seconds=180)).isoformat()
-            borrow=c.execute(
-                """SELECT seq FROM events WHERE action='BORROW' AND created_at>=?
-                   AND seq NOT IN (SELECT matched_borrow_seq FROM sensor_reports WHERE matched_borrow_seq IS NOT NULL)
-                   ORDER BY seq DESC LIMIT 1""",(cutoff,)).fetchone()
-            if borrow:
-                matched_seq=borrow["seq"]
-                result="RECENT_CHECKOUT"
-            else:
-                cur=c.execute(
-                    """INSERT INTO security_alerts(source,rack_id,detail,drop_grams,created_at)
-                       VALUES('SENSOR',?,?,?,?)""",
-                    (data.rack_id,"등록된 최근 대여 기록 없이 거치대 무게가 감소했습니다. 관리자가 확인해야 합니다.",
-                     round(drop,1),now()))
-                alert_id=cur.lastrowid
-                result="SUSPICIOUS"
-        c.execute(
-            """INSERT INTO rack_weights(rack_id,weight_grams,updated_at) VALUES(?,?,?)
-               ON CONFLICT(rack_id) DO UPDATE SET weight_grams=excluded.weight_grams,updated_at=excluded.updated_at""",
-            (data.rack_id,data.weight_grams,now()))
-        c.execute(
-            """INSERT INTO sensor_reports(event_id,rack_id,weight_grams,matched_borrow_seq,alert_id,created_at)
-               VALUES(?,?,?,?,?,?)""",
-            (data.event_id,data.rack_id,data.weight_grams,matched_seq,alert_id,now()))
-    return {"ok":True,"status":result,"alert_created":alert_id is not None,
-            "alert_id":alert_id}
-
-
 @app.get("/api/admin/inventory")
 def admin_inventory(request: Request):
     """Private inventory view. Student identifiers never appear in the public list."""
@@ -893,16 +761,14 @@ def export(request: Request):
         policies = c.execute("SELECT key,value FROM policies ORDER BY key").fetchall()
         allowances = c.execute("SELECT * FROM student_allowances ORDER BY month,student_id").fetchall()
         penalties = c.execute("SELECT * FROM penalty_actions ORDER BY id").fetchall()
-        security_alerts = c.execute("SELECT * FROM security_alerts ORDER BY id").fetchall()
     payload = {
-        "schema_version":"3.1",
+        "schema_version":"3.0",
         "exported_at":now(),
         "umbrellas":[{"id":uid(r["id"]),"status":r["status"],"borrower":r["borrower"],"rental_id":r["rental_id"]} for r in rows],
         "events":[dict(e) for e in events],
         "policies":[dict(p) for p in policies],
         "student_allowances":[dict(a) for a in allowances],
-        "penalty_actions":[dict(p) for p in penalties],
-        "security_alerts":[dict(a) for a in security_alerts]
+        "penalty_actions":[dict(p) for p in penalties]
     }
     return Response(json.dumps(payload,ensure_ascii=False,indent=2),media_type="application/json",
                     headers={"Content-Disposition": 'attachment; filename="umbrella-backup.json"', "Cache-Control":"no-store"})
