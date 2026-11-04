@@ -123,6 +123,18 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 #switchCamera{background:#f1efed;color:#484451}
 #modalText{white-space:pre-line;line-height:1.45}
 @media(max-width:550px){.camera-viewport{max-height:48vh}}
+
+.pin-setup-center{justify-content:flex-start;overflow-y:auto;padding:0 8px 15px}
+#pinSetup h1{font-size:clamp(27px,3vw,49px);margin-bottom:7px}
+#pinSetup .sub{font-size:clamp(14px,1.15vw,20px)}
+.pin-setup-card{background:#fff;border:2px solid #f0e1d9;border-radius:24px;padding:clamp(12px,2vw,26px);margin:clamp(10px,2vh,24px) auto 0;width:min(100%,670px);display:grid;justify-items:center;gap:12px}
+.pin-setup-fields{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.pin-setup-fields>div{display:grid;gap:6px}
+.pin-setup-fields label{font-size:clamp(13px,1.1vw,18px);font-weight:850}
+.pin-setup-fields input{width:100%;min-width:0;border:2px solid #efc5b8;border-radius:14px;height:54px;text-align:center;font-weight:900;font-size:clamp(20px,2vw,28px);letter-spacing:.15em}
+#pinSetupKeypad{width:min(100%,300px)}
+#pinSetupMessage{color:#7a6869;font-weight:700;font-size:clamp(12px,1.05vw,15px);line-height:1.4;margin:0}
+@media(max-width:550px){.pin-setup-fields{grid-template-columns:1fr;gap:8px}.pin-setup-card{gap:8px}.pin-setup-fields input{height:42px}}
 </style></head>
 <body>
 <div class="shell">
@@ -138,6 +150,24 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
   <section class="page" id="student"><div class="progress"><span class="current"></span><span></span><span></span></div>
    <h2 class="step-title">학생 정보를 선택해 주세요</h2><p class="step-sub">학년 · 반 · 번호를 순서대로 눌러 주세요.</p>
    <div class="selection-wrap"><div class="seg" id="seg"></div><div class="tiles" id="tiles"></div></div>
+  </section>
+  <section class="page" id="pinSetup">
+    <div class="progress"><span class="current"></span><span class="current"></span><span></span></div>
+    <div class="center pin-setup-center">
+      <p class="eyebrow">처음 이용하는 학생</p>
+      <h1>처음 사용할 PIN을 만들어 주세요!</h1>
+      <p class="sub">숫자 6자리 PIN을 두 번 입력해 주세요. 다른 사람이 볼 수 없게 조심하세요.</p>
+      <div class="pin-setup-card">
+        <div class="pin-setup-fields">
+          <div><label for="newStudentPin">새 PIN (6자리)</label>
+            <input id="newStudentPin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]*" autocomplete="new-password" placeholder="••••••" aria-label="새 학생 PIN"></div>
+          <div><label for="confirmStudentPin">새 PIN 다시 입력</label>
+            <input id="confirmStudentPin" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]*" autocomplete="new-password" placeholder="••••••" aria-label="새 학생 PIN 확인"></div>
+        </div>
+        <div class="pin-keypad" id="pinSetupKeypad" aria-label="PIN 만들기 숫자 키패드"></div>
+        <p id="pinSetupMessage" role="status" aria-live="polite">PIN은 한 번 만들면 다음 대여·반납부터 사용해요. PIN을 잊으면 담당 선생님께 문의하세요.</p>
+      </div>
+    </div>
   </section>
   <section class="page" id="qr"><div class="progress"><span class="current"></span><span class="current"></span><span></span></div>
    <h2 class="step-title">우산 QR 코드를 인식해 주세요</h2><p class="step-sub">우산에 붙은 QR을 스캔하거나 우산 ID를 입력할 수 있어요.</p>
@@ -158,7 +188,7 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 <script src="/assets/jsQR.js"></script>
 <script>
 "use strict";
-const $=id=>document.getElementById(id),pages=["welcome","student","qr","review","done"];
+const $=id=>document.getElementById(id),pages=["welcome","student","pinSetup","qr","review","done"];
 let step=0,mode="borrow",grade=0,klass=0,number=0,part=0,stream=null,interval=null,detecting=false,busy=false;
 let cameraFacing="environment",scanSession=0,qrDetector=null;
 const names=["학년","반","번호"],limits=[6,4,36];
@@ -174,14 +204,15 @@ $("closeModal").onclick=hideModal;
 function show(n){
  step=n;pages.forEach((id,i)=>$(id).classList.toggle("active",i===n));
  $("back").classList.remove("hidden");
- $("next").classList.toggle("hidden",n===0||n===4);
+ $("next").classList.toggle("hidden",n===0||n===5);
  $("next").disabled=false;
  if(n===1){renderTiles();}
- if(n===2){$("next").textContent="정보 확인 →";$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase());}
- if(n===3){$("next").textContent=mode==="borrow"?"PIN 확인 후 대여":"PIN 확인 후 반납";$("next").disabled=!pinReady();$("vAction").textContent=mode==="borrow"?"우산 대여":"우산 반납";$("vStudent").textContent=grade+"학년 "+klass+"반 "+number+"번";$("vUmbrella").textContent=$("umbrella").value.trim().toUpperCase();}
- $("summary").textContent=n===0?"한 학생당 우산 1개까지 대여 가능":n===4?"안전하게 이용해 주세요":mode==="borrow"?"우산 대여 진행 중":"우산 반납 진행 중";
+ if(n===2){$("next").textContent="PIN 만들고 계속 →";$("next").disabled=!pinSetupReady();}
+ if(n===3){$("next").textContent="정보 확인 →";$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase());}
+ if(n===4){$("next").textContent=mode==="borrow"?"PIN 확인 후 대여":"PIN 확인 후 반납";$("next").disabled=!pinReady();$("vAction").textContent=mode==="borrow"?"우산 대여":"우산 반납";$("vStudent").textContent=grade+"학년 "+klass+"반 "+number+"번";$("vUmbrella").textContent=$("umbrella").value.trim().toUpperCase();}
+ $("summary").textContent=n===0?"한 학생당 우산 1개까지 대여 가능":n===5?"안전하게 이용해 주세요":mode==="borrow"?"우산 대여 진행 중":"우산 반납 진행 중";
 }
-function start(m){mode=m;grade=0;klass=0;number=0;part=0;$("umbrella").value="";$("studentPin").value="";show(1);}
+function start(m){mode=m;grade=0;klass=0;number=0;part=0;$("umbrella").value="";$("studentPin").value="";$("newStudentPin").value="";$("confirmStudentPin").value="";show(1);}
 $("startBorrow").onclick=()=>start("borrow");$("startReturn").onclick=()=>start("return");
 function renderTiles(){
  const vals=[grade,klass,number],active=part;
@@ -189,10 +220,38 @@ function renderTiles(){
  for(const b of $("seg").children)b.onclick=()=>{part=Number(b.dataset.part);renderTiles();};
  $("tiles").dataset.mode=["grade","class","number"][active];
  $("tiles").innerHTML="";
- for(let i=1;i<=limits[active];i++){const b=document.createElement("button");b.className="tile"+(vals[active]===i?" selected":"");b.textContent=i;b.onclick=()=>{if(active===0)grade=i;if(active===1)klass=i;if(active===2)number=i;if(active<2){part=active+1;}renderTiles();};$("tiles").append(b);}
+ for(let i=1;i<=limits[active];i++){const b=document.createElement("button");b.className="tile"+(vals[active]===i?" selected":"");b.textContent=i;b.onclick=()=>{if(active===0)grade=i;if(active===1)klass=i;if(active===2)number=i;if(active<2){part=active+1;}$("studentPin").value="";renderTiles();};$("tiles").append(b);}
  $("next").textContent="다음 단계 →";$("next").disabled=!(grade&&klass&&number);
 }
-$("umbrella").addEventListener("input",()=>{$("umbrella").value=$("umbrella").value.toUpperCase();if(step===2)$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim());});
+$("umbrella").addEventListener("input",()=>{$("umbrella").value=$("umbrella").value.toUpperCase();if(step===3)$("next").disabled=!/^UMB-\d{4,}$/.test($("umbrella").value.trim());});
+function pinSetupReady(){
+ const pin=$("newStudentPin").value,confirmation=$("confirmStudentPin").value;
+ return /^\d{6}$/.test(pin)&&pin===confirmation;
+}
+let setupPinTarget=$("newStudentPin");
+for(const id of ["newStudentPin","confirmStudentPin"]){
+ const input=$(id);
+ input.addEventListener("focus",()=>{setupPinTarget=input;});
+ input.addEventListener("input",()=>{
+  input.value=input.value.replace(/\D/g,"").slice(0,6);
+  if(step===2)$("next").disabled=!pinSetupReady();
+ });
+}
+for(const key of pinKeys){
+ const button=document.createElement("button");
+ button.type="button";button.textContent=key;
+ button.setAttribute("aria-label",key==="←"?"한 자리 삭제":key==="지우기"?"전체 삭제":key);
+ button.onclick=()=>{
+  const target=setupPinTarget;
+  if(key==="지우기")target.value="";
+  else if(key==="←")target.value=target.value.slice(0,-1);
+  else if(target.value.length<6)target.value+=key;
+  if(target===$("newStudentPin")&&target.value.length===6)setupPinTarget=$("confirmStudentPin");
+  $("next").disabled=!pinSetupReady();
+  $("pinSetupMessage").textContent="6자리 PIN을 두 번 똑같이 입력해 주세요.";
+ };
+ $("pinSetupKeypad").append(button);
+}
 function pinReady(){return /^\d{6}$/.test($("studentPin").value);}
 const pinKeys=["1","2","3","4","5","6","7","8","9","지우기","0","←"];
 for(const key of pinKeys){
@@ -209,20 +268,54 @@ for(const key of pinKeys){
 }
 $("studentPin").addEventListener("input",()=>{
  $("studentPin").value=$("studentPin").value.replace(/\D/g,"").slice(0,6);
- if(step===3)$("next").disabled=!pinReady();
+ if(step===4)$("next").disabled=!pinReady();
 });
-$("back").onclick=()=>{if(busy)return;if(step===1||step===4)show(0);else if(step===2)show(1);else if(step===3)show(2);};
+$("back").onclick=()=>{if(busy)return;if(step===1||step===5)show(0);else if(step===2||step===3)show(1);else if(step===4)show(3);};
 async function api(path,body){const res=await fetch(path,{method:body?"POST":"GET",headers:body?{"Content-Type":"application/json"}:{},body:body?JSON.stringify(body):undefined,cache:"no-store",credentials:"same-origin"});const data=await res.json().catch(()=>({}));if(!res.ok)throw Error(typeof data.detail==="string"?data.detail:"서버 오류 "+res.status);return data;}
 async function finalize(){
  if(busy||!pinReady())return;
  busy=true;$("next").disabled=true;
  try{const result=await api("/api/"+mode,{umbrella_id:$("umbrella").value.trim().toUpperCase(),grade,classroom:klass,number,pin:$("studentPin").value});
    $("doneIcon").textContent="✅";$("doneTitle").textContent=mode==="borrow"?"대여가 완료됐어요!":"반납이 완료됐어요!";
-   $("doneMessage").textContent=mode==="borrow"?"우산을 잘 사용하고 반납해 주세요.\n이번 달 남은 대여 횟수: "+result.remaining+"회":"반납해 주셔서 고마워요.";show(4);await refresh();
- }catch(err){$("doneIcon").textContent="⚠️";$("doneTitle").textContent="처리하지 못했어요";$("doneMessage").textContent=err.message;show(4);}
+   $("doneMessage").textContent=mode==="borrow"?"우산을 잘 사용하고 반납해 주세요.\n이번 달 남은 대여 횟수: "+result.remaining+"회":"반납해 주셔서 고마워요.";show(5);await refresh();
+ }catch(err){$("doneIcon").textContent="⚠️";$("doneTitle").textContent="처리하지 못했어요";$("doneMessage").textContent=err.message;show(5);}
  finally{$("studentPin").value="";busy=false;}
 }
-$("next").onclick=()=>{if(step===1&&grade&&klass&&number)show(2);else if(step===2&&/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase()))show(3);else if(step===3&&pinReady())finalize();};
+async function continueAfterStudent(){
+ if(busy||!(grade&&klass&&number))return;
+ busy=true;$("next").disabled=true;
+ try{
+  const record=await api("/api/student-pin/status",{grade,classroom:klass,number});
+  $("studentPin").value="";
+  $("newStudentPin").value="";
+  $("confirmStudentPin").value="";
+  show(record.has_pin?3:2);
+ }catch(error){
+  modalError("학생 정보 확인 실패",error.message+"\n다시 시도해 주세요.");
+  $("next").disabled=false;
+ }finally{busy=false;}
+}
+async function saveFirstPin(){
+ if(busy||!pinSetupReady())return;
+ busy=true;$("next").disabled=true;
+ const pin=$("newStudentPin").value;
+ try{
+  await api("/api/student-pin/enroll",{grade,classroom:klass,number,pin,pin_confirm:$("confirmStudentPin").value});
+  $("studentPin").value=pin;
+  $("newStudentPin").value="";$("confirmStudentPin").value="";
+  $("pinSetupMessage").textContent="PIN 설정 완료! 이제 우산 QR을 스캔해 주세요.";
+  show(3);
+ }catch(error){
+  $("pinSetupMessage").textContent="설정 실패: "+error.message;
+  $("next").disabled=!pinSetupReady();
+ }finally{busy=false;}
+}
+$("next").onclick=()=>{
+ if(step===1)continueAfterStudent();
+ else if(step===2)saveFirstPin();
+ else if(step===3&&/^UMB-\d{4,}$/.test($("umbrella").value.trim().toUpperCase()))show(4);
+ else if(step===4&&pinReady())finalize();
+};
 async function refresh(){try{const data=await api("/api/umbrellas");$("stock").textContent="● 대여 가능 "+data.filter(x=>x.status==="AVAILABLE").length+"개";}catch{$("stock").textContent="● 연결 확인 필요";}}
 // Decode printed umbrella IDs from the live camera only; no photo uploads.
 const scanCanvas=document.createElement("canvas"),scanContext=scanCanvas.getContext("2d",{willReadFrequently:true});
