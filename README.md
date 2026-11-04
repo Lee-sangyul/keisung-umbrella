@@ -194,10 +194,52 @@ uvicorn server:app --host 0.0.0.0 --port 8000 --reload
 ```bash
 pip install -r requirements.txt
 pip install pytest httpx
-pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
+pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py tests/test_academic_year.py
 ```
 
 테스트는 임시 SQLite DB를 사용하며 운영 DB를 초기화하지 않습니다.
+
+## 학년도 승급 및 영구 학생 ID (v1.8)
+
+2026학년도 `5-2-14` 학생이 2027학년도 `6-1-7`이 되어도 **같은 사람으로 연결**하기 위해, 학년·반·번호와 별도로 `STU-...` 형식의 변하지 않는 학생 UID를 관리합니다. 실제 학생 이름·생년월일을 저장하지 않으며, **UID와 현재 학년·반·번호의 연결 관계를 관리자 전용 DB에 저장**합니다.
+
+- **유지:** 학생이 등록한 PIN 해시, 대여·반납 이력, 대여 기한, 월간 대여 횟수, 추가 허용 횟수, 패널티 및 취소 기록, 현재 미반납 우산
+- **변경:** 새 학년도 학년·반·번호. 기존 이벤트·대여 로그에 적힌 과거 학년·반·번호는 당시 상태 그대로 보존
+- **번호 재사용:** 예전 `5-2-14`를 다음 해 다른 학생이 쓰더라도 기존 학생의 PIN/패널티/우산을 가져오지 않습니다. 새 학생은 새 UID와 PIN을 사용합니다.
+- **교직원:** `STAFF:` 계정 및 교직원 대여 기록은 학생 학년도 변경의 대상이 아닙니다.
+
+### 연말·신학기 승급 절차
+
+1. 먼저 **운영 DB(`data/umbrellas.db`)와 함께 WAL/SHM 파일을 일관된 방식으로 백업**하거나 SQLite 온라인 백업을 만듭니다. 관리자 JSON 백업에는 PIN 해시가 없어 **JSON만으로는 PIN 복구가 불가능**합니다.
+2. 관리자 `/admin` → **학년도·승급 관리**를 엽니다. 현재 학년도 명단을 `TSV`로 다운로드하고, 학교의 **공식 신학기 반 편성 명단**과 학생별로 대조합니다.
+3. `new_student_id` 열에 새 학년·반·번호를 입력합니다. 6학년 졸업 예정자는 `GRADUATE`, 전출자는 `LEAVE`를 입력합니다. 기존 학생 **한 명도 누락하면 안 됩니다**. 입학생/새로 전학 오는 학생은 새 학년도 적용 후 키오스크 최초 PIN 등록 또는 관리자 발급으로 신규 UID를 만들 수 있습니다.
+4. 모든 ID 열을 **텍스트 형식**으로 열어야 합니다(Excel이 `5-2-14`를 날짜로 바꿀 수 있음). 완성한 TSV 또는 CSV를 관리자 화면에 가져온 뒤 **미리보기**를 실행합니다.
+5. 미리보기는 **중복 학급, 누락 학생, 승급 학년 오류, 미반납 우산이 있는 졸업·전출 대상자**를 검사합니다. 안전한 정상 승급은 한 학년 위로만 허용됩니다. 유급·복학 같은 예외는 개별 배정 보정으로 처리합니다.
+6. 공식 명단 대조와 DB 백업을 체크한 뒤 **최종 적용**하면 학년도가 한 번에 변경됩니다. 잘못된 처리나 중간 실패는 SQLite 트랜잭션으로 전부 되돌립니다.
+7. 승인 후에는 **개별 배정 보정**에서 영구 UID를 확인하고 잘못된 반·번호 또는 복학 배정을 수정할 수 있습니다. 이미 다른 학생이 배정된 번호는 거절하며 담당 교사의 신원 확인과 사유(5자 이상)를 기록합니다.
+
+**주의:** 이 프로그램은 공식 학생명부와 자동으로 연결되어 있지 않습니다. **이름 또는 번호만으로 동명이인/동일인 여부를 추론하지 않습니다.** 학교 관리자와 담당 교사가 공식 자료로 UID–새 학급 연결을 검토해야 합니다. 과거 이력만 존재하는 오래된 번호도 최초 DB 이관 시 명단에 포함될 수 있으며, 이 경우 `LEAVE`로 명시적으로 정리해야 합니다. 다른 학생의 UID에 잘못 연결하면 기존 PIN과 이력까지 연결되므로 최종 적용은 반드시 사전 검토하세요.
+
+학년도는 서버에서 무단으로 매년 자동 변경되지 않습니다. **관리자가 명시적으로 다음 학년도로 적용**해야 하며, 졸업·전출 학생은 기존 PIN과 기록을 보존하지만 새 학년도 반 배정이 없으므로 키오스크 이용은 차단됩니다. 미반납 대여가 있으면 졸업·전출 적용 자체를 차단합니다.
+
+기존 `student_pins`의 PIN 해시는 신규 `student_credentials` 테이블로 복사하여 영구 UID에 연결합니다. 기존 테이블은 이전 기록 복구·마이그레이션 호환성을 위해 남겨두고, **새 인증에는 사용하지 않습니다**. 서버 재시작과 중복 이관에도 기존 UID 및 PIN을 유지합니다.
+
+### 관련 API
+
+`GET /api/admin/academic-year`: 학년도와 UID 명단 조회.
+`POST /api/admin/academic-year/preview`: 학급 배정 미리보기·검증.
+`POST /api/admin/academic-year/apply`: 관리자 최종 적용(미리보기 토큰·명시적 확인 필요).
+`POST /api/admin/academic-year/assign`: 신원 확인 후 개별 학급 정정.
+
+모든 API는 관리자 인증이 필요하고 **변경·미리보기 POST에는 CSRF 검사**를 적용합니다. 학생용 키오스크에서는 UID 명단 조회 및 변경이 불가능합니다.
+
+### 테스트
+
+```bash
+python -m pip install -r requirements.txt
+python -m pip install pytest httpx
+pytest -q tests/test_academic_year.py
+```
 
 ## 학생 PIN 첫 설정 (교사 승인 기능 제거)
 
@@ -240,7 +282,7 @@ pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktak
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install pytest httpx
-pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
+pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py tests/test_academic_year.py
 ```
 
 ## 대여 기한·연체 관리 (v1.5)
@@ -264,7 +306,7 @@ pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktak
 ```bash
 python -m pip install -r requirements.txt
 python -m pip install pytest httpx
-pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py
+pytest -q tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py tests/test_academic_year.py
 ```
 
 테스트는 임시 SQLite DB에서 진행되며 실제 운영 DB를 초기화하지 않습니다.
