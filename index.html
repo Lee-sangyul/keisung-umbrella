@@ -37,6 +37,16 @@
 @media(max-width:1180px){.layout{grid-template-columns:190px minmax(0,1fr)}.sidebar{padding:20px 12px}.dual{grid-template-columns:1fr}.stat{min-height:130px}.stats{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:780px){.layout{grid-template-columns:1fr}.sidebar{padding:12px 16px;gap:13px;border-right:0;border-bottom:1px solid #eceef2}.nav{display:flex;overflow-x:auto}.nav button{white-space:nowrap}.side-label,.side-bottom{display:none}.main{padding:16px}.topbar{align-items:flex-start;flex-direction:column}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.stat{min-height:116px;padding:16px}.stat strong{font-size:32px}.formgrid{grid-template-columns:1fr}}
 @media(max-width:410px){.stats{gap:8px}.stat{padding:14px}.stat-label{font-size:12px}.toolbar{width:100%}.toolbar .btn{flex:1}.legend{grid-template-columns:1fr}}
+
+.student-lookup{margin-bottom:22px;background:#fff9f5;border:1px solid #ffe1d5;border-radius:15px;padding:18px}
+.student-lookup strong{font-size:15px}
+.student-lookup p{margin:5px 0 13px}
+.student-fields{display:grid;grid-template-columns:repeat(3,minmax(90px,1fr)) auto;gap:11px;align-items:end}
+.student-fields .field{min-width:0}
+.student-fields .btn{min-height:44px}
+.lookup-result{margin-top:13px;border-radius:11px;padding:13px;background:#fff;color:#555a68;border:1px solid #e9e8ed;font-size:13px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.lookup-result strong{font-size:15px;color:#32343f}
+@media(max-width:700px){.student-fields{grid-template-columns:repeat(3,minmax(0,1fr))}.student-fields .btn{grid-column:1/-1}.student-lookup{padding:13px}}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -71,8 +81,13 @@
     <div id="inventory" class="tab">
       <section class="panel">
        <div class="head"><div><h2 class="section-title">우산 목록</h2><p class="subtext">우산은 삭제하지 않으며 고유 ID가 유지됩니다.</p></div><button class="btn primary" id="register">＋ 우산 등록</button></div>
-       <div class="searchline"><input class="input search" id="search" placeholder="우산 ID 검색 (예: UMB-0001)" aria-label="우산 검색"><div class="filters"><select id="filter" aria-label="상태 필터"><option value="">전체 상태</option><option value="AVAILABLE">대여 가능</option><option value="BORROWED">대여 중</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option></select></div></div>
-       <div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>상태</th><th>대여 학생</th><th>관리</th></tr></thead><tbody id="inventoryRows"></tbody></table></div>
+       <div class="searchline"><input class="input search" id="search" placeholder="우산 ID 또는 학생 (예: 6-4-16)" aria-label="우산 ID 또는 학년 반 번호로 검색"><div class="filters"><select id="filter" aria-label="상태 필터"><option value="">전체 상태</option><option value="AVAILABLE">대여 가능</option><option value="BORROWED">대여 중</option><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option></select></div></div>
+       <div class="student-lookup" aria-label="학생별 대여 우산 조회">
+ <div><strong>학생으로 대여 우산 찾기</strong><p class="helper">학년 · 반 · 번호로 현재 대여 중인 우산을 조회합니다. 관리자만 이용할 수 있습니다.</p></div>
+ <div class="student-fields"><div class="field"><label for="studentGrade">학년</label><select id="studentGrade"></select></div><div class="field"><label for="studentClass">반</label><select id="studentClass"></select></div><div class="field"><label for="studentNumber">번호</label><select id="studentNumber"></select></div><button type="button" class="btn primary" id="findStudent">조회</button></div>
+ <div id="studentResult" class="lookup-result hide" role="status"></div>
+ </div>
+ <div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>상태</th><th>대여 학생</th><th>관리</th></tr></thead><tbody id="inventoryRows"></tbody></table></div>
       </section>
       <section class="panel" id="manageCard"><div class="head"><div><h2 class="section-title">상태 변경</h2><p class="subtext">분실·파손·폐기 처리 또는 복구</p></div></div>
         <div class="formgrid"><div class="field"><label for="adminId">우산 ID</label><select id="adminId"></select></div><div class="field"><label for="state">변경할 상태</label><select id="state"><option value="LOST">분실</option><option value="DAMAGED">파손</option><option value="DISPOSED">폐기</option><option value="AVAILABLE">대여 가능으로 복구</option></select></div><div class="field wide"><label for="reason">사유 (선택)</label><input class="input" id="reason" maxlength="160" placeholder="예: 1층 우산함에서 발견"></div></div>
@@ -124,7 +139,8 @@ function renderStats(){
 }
 function renderInventory(){
  const search=$("search").value.trim().toUpperCase(),status=$("filter").value;
- const items=inventory.filter(x=>(!search||x.id.includes(search))&&(!status||x.status===status));
+ const normalized=search.replace(/\\s/g,"").replace(/학년|반|번/g,"-").replace(/-+/g,"-").replace(/-$/,"");
+ const items=inventory.filter(x=>(!search||x.id.includes(search)||String(x.borrower||"").includes(normalized))&&(!status||x.status===status));
  $("inventoryRows").innerHTML=items.map(x=>'<tr><td><strong>'+esc(x.id)+'</strong></td><td>'+pill(x.status)+'</td><td>'+esc(x.borrower||"—")+'</td><td><button class="btn" data-id="'+esc(x.id)+'" '+(x.status==="DISPOSED"?"disabled":"")+'>관리</button></td></tr>').join("")||empty(4,"검색된 우산이 없습니다.");
  for(const b of $("inventoryRows").querySelectorAll("[data-id]"))b.onclick=()=>{$("adminId").value=b.dataset.id;$("manageCard").scrollIntoView({behavior:"smooth",block:"center"});};
  const prev=$("adminId").value;
@@ -155,6 +171,30 @@ $("logout").onclick=async()=>{
  csrf="";inventory=[];events=[];show(false);
 };
 $("refresh").onclick=async()=>{try{await refresh();}catch(e){alert("새로고침 실패: "+e.message);}};
+// Student lookup uses admin-authenticated inventory data only.
+for(const [id,max,label] of [["studentGrade",6,"학년"],["studentClass",4,"반"],["studentNumber",36,"번"]]){
+ const el=$(id);el.add(new Option("선택",""));
+ for(let n=1;n<=max;n++)el.add(new Option(n+label,String(n)));
+}
+function pickUmbrella(id){
+ changeTab("inventory");$("search").value="";$("filter").value="";
+ renderInventory();$("adminId").value=id;
+ $("manageCard").scrollIntoView({behavior:"smooth",block:"center"});
+}
+function findStudent(){
+ const values=[$("studentGrade").value,$("studentClass").value,$("studentNumber").value];
+ const box=$("studentResult");box.classList.remove("hide");
+ if(values.some(v=>!v)){box.textContent="학년, 반, 번호를 모두 선택해 주세요.";return;}
+ const student=values.map(Number).join("-");
+ const borrowed=inventory.filter(u=>u.status==="BORROWED"&&u.borrower===student);
+ if(!borrowed.length){box.textContent=student+" 학생이 현재 대여 중인 우산이 없습니다.";return;}
+ box.replaceChildren();
+ const info=document.createElement("span");info.textContent=student+" 학생 · "+borrowed.map(u=>u.id).join(", ")+" (대여 중)";
+ const button=document.createElement("button");button.type="button";button.className="btn primary";button.textContent="이 우산 처리하기";
+ button.onclick=()=>pickUmbrella(borrowed[0].id);
+ box.append(info,button);
+}
+$("findStudent").onclick=findStudent;
 $("search").oninput=renderInventory;$("filter").onchange=renderInventory;
 $("eventSearch").oninput=renderEvents;$("eventFilter").onchange=renderEvents;
 $("register").onclick=async()=>{
