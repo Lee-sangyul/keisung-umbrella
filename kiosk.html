@@ -152,13 +152,13 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
  <main>
   <section class="page active" id="welcome"><div class="center">
     <p class="eyebrow">KEISUNG UMBRELLA</p>
-    <h1 id="welcomeTitle">학생인가요, 교직원인가요?</h1>
-    <p class="sub" id="welcomeHint">이용자 유형을 선택해 주세요.</p>
-    <div class="choice-grid role-choice" id="roleChooser">
+    <h1 id="welcomeTitle">우산이 필요하신가요?</h1>
+    <p class="sub" id="welcomeHint">우산을 빌리거나 반납할 수 있어요.</p>
+    <div class="choice-grid role-choice hidden" id="roleChooser">
       <button class="choice borrow" type="button" id="chooseStudent"><span class="symbol" aria-hidden="true">🎒</span><strong>학생</strong><small>학년 · 반 · 번호와 학생 PIN</small></button>
       <button class="choice return" type="button" id="chooseStaff"><span class="symbol" aria-hidden="true">👩‍🏫</span><strong>교직원</strong><small>교직원 ID와 전용 PIN</small></button>
     </div>
-    <div class="choice-grid hidden" id="actionChooser"><button class="choice borrow" id="startBorrow"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M9 30C12 17 21 10 32 10s20 7 23 20c-5-3-10-3-15 0-5-3-11-3-16 0-5-3-10-3-15 0Z" stroke="currentColor" stroke-width="3.8" stroke-linejoin="round"/><path d="M32 30v19c0 5 3 8 7 8s7-3 7-7" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/><path d="M32 5v5" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></svg></span><strong>우산 빌리기</strong><small>QR 인식 후 간편 대여</small></button><button class="choice return" id="startReturn"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M22 16 10 28l12 12M11 28h24c11 0 18 7 18 17 0 8-5 14-13 14H27" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><strong>우산 반납하기</strong><small>빌린 우산을 돌려주세요</small></button></div>
+    <div class="choice-grid" id="actionChooser"><button class="choice borrow" id="startBorrow"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M9 30C12 17 21 10 32 10s20 7 23 20c-5-3-10-3-15 0-5-3-11-3-16 0-5-3-10-3-15 0Z" stroke="currentColor" stroke-width="3.8" stroke-linejoin="round"/><path d="M32 30v19c0 5 3 8 7 8s7-3 7-7" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/><path d="M32 5v5" stroke="currentColor" stroke-width="3.8" stroke-linecap="round"/></svg></span><strong>우산 빌리기</strong><small>QR 인식 후 간편 대여</small></button><button class="choice return" id="startReturn"><span class="symbol"><svg class="ui-icon" viewBox="0 0 64 64" fill="none" aria-hidden="true"><path d="M22 16 10 28l12 12M11 28h24c11 0 18 7 18 17 0 8-5 14-13 14H27" stroke="currentColor" stroke-width="4.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><strong>우산 반납하기</strong><small>빌린 우산을 돌려주세요</small></button></div>
   </div></section>
   <section class="page" id="student"><div class="progress"><span class="current"></span><span></span><span></span></div>
    <h2 class="step-title">학생 정보를 선택해 주세요</h2><p class="step-sub">학년 · 반 · 번호를 순서대로 눌러 주세요.</p>
@@ -211,7 +211,7 @@ main{padding:clamp(12px,2vh,25px) clamp(18px,3vw,48px)}
 <script>
 "use strict";
 const $=id=>document.getElementById(id),pages=["welcome","student","pinSetup","qr","review","done","staffIdentification"];
-let step=0,mode="borrow",role=null,grade=0,klass=0,number=0,part=0,stream=null,interval=null,detecting=false,busy=false;
+let step=0,mode="borrow",role=null,choosingRole=false,grade=0,klass=0,number=0,part=0,stream=null,interval=null,detecting=false,busy=false;
 let cameraFacing="environment",scanSession=0,qrDetector=null;
 const names=["학년","반","번호"],limits=[6,4,36];
 function modalError(title,msg){stopScan();$("modalTitle").textContent=title;$("modalText").textContent=msg;$("video").classList.add("hidden");$("overlay").classList.remove("hidden");$("switchCamera").classList.add("hidden");}
@@ -223,12 +223,28 @@ function stopScan(){
  const video=$("video");video.pause();video.srcObject=null;detecting=false;
 }
 $("closeModal").onclick=hideModal;
-function resetRoleChooser(){
- role=null;$("staffId").value="";$("studentPin").value="";
+function resetToStart(){
+ choosingRole=false;role=null;
+ $("staffId").value="";$("studentPin").value="";
  $("newStudentPin").value="";$("confirmStudentPin").value="";
+ $("umbrella").value="";
+ hideModal();
  show(0);
 }
-function chooseRole(value){role=value;$("studentPin").value="";show(0);}
+function backToRoleChooser(){
+ role=null;choosingRole=true;
+ $("studentPin").value="";$("staffId").value="";
+ $("newStudentPin").value="";$("confirmStudentPin").value="";
+ $("umbrella").value="";
+ hideModal();
+ show(0);
+}
+function chooseRole(value){
+ if(!choosingRole)return;
+ role=value;choosingRole=false;
+ $("studentPin").value="";
+ show(role==="staff"?6:1);
+}
 function validStaffId(){return /^[A-Z0-9][A-Z0-9_-]{2,19}$/.test($("staffId").value);}
 $("chooseStudent").onclick=()=>chooseRole("student");
 $("chooseStaff").onclick=()=>chooseRole("staff");
@@ -243,17 +259,17 @@ $("staffId").addEventListener("keydown",event=>{
 });
 function show(n){
  step=n;pages.forEach((id,i)=>$(id).classList.toggle("active",i===n));
- $("back").classList.toggle("hidden",n===0&&!role);
+ $("back").classList.toggle("hidden",n===0&&!choosingRole);
  $("next").classList.toggle("hidden",n===0||n===5);
  $("next").disabled=false;
  if(n===0){
-  const isRoleStep=!role;
-  $("roleChooser").classList.toggle("hidden",!isRoleStep);
-  $("actionChooser").classList.toggle("hidden",isRoleStep);
-  $("welcomeTitle").textContent=isRoleStep?"학생인가요, 교직원인가요?":"무엇을 하시겠어요?";
-  $("welcomeHint").textContent=isRoleStep?"이용자 유형을 선택해 주세요.":
-   (role==="student"?"학생용 대여·반납 서비스입니다.":"교직원용 대여·반납 서비스입니다.");
-  $("back").textContent="이용자 다시 선택";
+  $("roleChooser").classList.toggle("hidden",!choosingRole);
+  $("actionChooser").classList.toggle("hidden",choosingRole);
+  $("welcomeTitle").textContent=choosingRole?"학생인가요, 교직원인가요?":"우산이 필요하신가요?";
+  $("welcomeHint").textContent=choosingRole?
+   (mode==="borrow"?"우산을 빌릴 분의 유형을 선택해 주세요.":"우산을 반납할 분의 유형을 선택해 주세요."):
+   "우산을 빌리거나 반납할 수 있어요.";
+  $("back").textContent="대여·반납 다시 선택";
  }else $("back").textContent="이전 단계";
  if(n===1){renderTiles();}
  if(n===6){$("next").textContent="우산 QR 확인 →";$("next").disabled=!validStaffId();}
@@ -273,12 +289,13 @@ function show(n){
  $("summary").textContent=n===0?"학생·교직원 모두 한 번에 우산 1개까지":n===5?"안전하게 이용해 주세요":mode==="borrow"?"우산 대여 진행 중":"우산 반납 진행 중";
 }
 function start(m){
- if(!role)return;
- mode=m;grade=0;klass=0;number=0;part=0;
+ if(busy)return;
+ mode=m;role=null;choosingRole=true;
+ grade=0;klass=0;number=0;part=0;
  $("umbrella").value="";$("studentPin").value="";
  $("newStudentPin").value="";$("confirmStudentPin").value="";
- if(role==="staff")$("staffId").value="";
- show(role==="staff"?6:1);
+ $("staffId").value="";
+ show(0);
 }
 $("startBorrow").onclick=()=>start("borrow");
 $("startReturn").onclick=()=>start("return");
@@ -341,8 +358,8 @@ $("studentPin").addEventListener("input",()=>{
 });
 $("back").onclick=()=>{
  if(busy)return;
- if(step===0||step===5){resetRoleChooser();}
- else if(step===1||step===6){show(0);}
+ if(step===0||step===5){resetToStart();}
+ else if(step===1||step===6){backToRoleChooser();}
  else if(step===2){show(1);}
  else if(step===3){show(role==="staff"?6:1);}
  else if(step===4){$("studentPin").value="";show(3);}
