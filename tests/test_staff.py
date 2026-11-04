@@ -229,3 +229,27 @@ def test_staff_lending_coexists_with_student_borrow_and_audit(client):
         **student, "pin": student_pin, "umbrella_id": "UMB-0002"
     }).status_code == 200
     assert client.get("/api/admin/rentals").json()["total"] == 0
+
+
+def test_single_kiosk_serves_both_roles_and_old_staff_url_redirects(client):
+    home=client.get("/")
+    assert home.status_code==200
+    assert 'id="roleChooser"' in home.text
+    assert 'id="chooseStudent"' in home.text
+    assert 'id="chooseStaff"' in home.text
+    assert 'id="actionChooser"' in home.text
+    assert 'id="staffIdentification"' in home.text
+    assert 'href="/staff"' not in home.text
+
+    legacy=client.get("/staff",follow_redirects=False)
+    assert legacy.status_code==307
+    assert legacy.headers["location"]=="/"
+    legacy_slash=client.get("/staff/",follow_redirects=False)
+    assert legacy_slash.status_code==307
+    assert legacy_slash.headers["location"]=="/"
+
+    # There is a single kiosk, not separate student/staff HTML pages.
+    assert client.get("/staff").text==home.text
+    admin=client.get("/admin")
+    assert admin.status_code==200
+    assert 'href="/staff"' not in admin.text
