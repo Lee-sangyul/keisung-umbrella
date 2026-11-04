@@ -71,17 +71,6 @@
 .batch-register-form{display:flex;align-items:end;gap:12px;flex-wrap:wrap}
 .batch-register-form .field{width:min(270px,100%)}
 .batch-register-form .btn{min-height:45px}
-.nav-alert-count{display:inline-grid;place-items:center;margin-left:4px;min-width:24px;height:23px;padding:0 6px;border-radius:12px;background:#d83737;color:white;font-size:12px}
-.security-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;border:1px solid #fed7aa;background:#fff7ed;color:#854d0e;border-radius:12px;padding:14px 18px;margin-bottom:18px;font-weight:750}
-.security-warning{background:#fff1f2;border-color:#fecdd3;color:#9f1239}
-.security-list{display:grid;gap:10px;margin-top:14px}
-.security-entry{padding:16px;border:1px solid #e2e8f0;border-radius:13px;background:#f8fafc}
-.security-entry.security-open{background:#fffaf6;border-color:#fdba74}
-.security-entry p{line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap}
-.security-entry-head{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.security-state{font-size:12px;color:#9a3412;font-weight:850}
-.security-meta{color:#6b7280;font-size:12px;margin:9px 0}
-.security-entry .btn{margin-top:6px}
 </style></head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
@@ -95,7 +84,6 @@
     <a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a>
     <div><p class="side-label">MANAGEMENT</p><nav class="nav" aria-label="관리 메뉴">
       <button type="button" data-tab="dashboard" class="active"><span>▦</span> 대시보드</button>
-      <button type="button" data-tab="security"><span>⚠</span> 안전 알림 <strong id="navAlertCount" class="nav-alert-count hide">0</strong></button>
       <button type="button" data-tab="inventory"><span>▤</span> 우산 관리</button>
       <button type="button" data-tab="history"><span>◷</span> 대여 기록</button>
       <button type="button" data-tab="studentPolicy"><span>♧</span> 학생·패널티 관리</button>
@@ -109,37 +97,12 @@
     <div class="toolbar"><span class="session" id="who">관리자</span><button class="btn" id="refresh" type="button">↻ 새로고침</button><button class="btn" id="logout" type="button">로그아웃</button></div></div>
     <div class="notice">학생의 학년·반·번호는 개인정보에 해당할 수 있습니다. 운영 전 학교 승인 및 학생 인증, 개인정보 보존 정책을 확인하세요.</div>
     <div id="dashboard" class="tab active">
-      <div id="securityBanner" class="security-banner hide" role="status" aria-live="polite">
-        <span id="securityBannerText"></span>
-        <button type="button" class="btn" id="goSecurity">알림 확인</button>
-      </div>
       <div class="stats" id="stats"></div>
       <div class="dual">
         <section class="panel"><div class="head"><div><h2 class="section-title">우산 상태 분포</h2><p class="subtext">현재 등록된 모든 우산 기준</p></div></div><div class="distribution" id="distribution"></div><div class="legend" id="legend"></div></section>
         <section class="panel"><div class="head"><div><h2 class="section-title">최근 활동</h2><p class="subtext">가장 최근 처리된 이벤트</p></div></div><div id="recentActivity" class="activity"></div></section>
       </div>
       <section class="panel"><div class="head"><div><h2 class="section-title">대여 중인 우산</h2><p class="subtext">현재 반납되지 않은 우산</p></div><button class="btn" data-go="inventory">전체 보기</button></div><div class="tablewrap"><table><thead><tr><th>우산 ID</th><th>대여 학생</th><th>상태</th></tr></thead><tbody id="borrowedRows"></tbody></table></div></section>
-    </div>
-    <div id="security" class="tab">
-      <section class="panel">
-        <div class="head"><div>
-          <h2 class="section-title">무단 반출 의심 · 재고 이상 알림</h2>
-          <p class="subtext">무게 변화나 재고 불일치는 도난의 확정 증거가 아닙니다. 먼저 현장을 확인해 주세요.</p>
-        </div><div class="actions"><button type="button" class="btn" id="enableBrowserAlerts">브라우저 알림 켜기</button><button type="button" class="btn" id="refreshSecurity">↻ 알림 새로고침</button></div></div>
-        <div class="security-banner" id="securityState" role="status">알림을 확인하고 있습니다.</div>
-        <div id="securityRows" class="security-list"></div>
-      </section>
-      <section class="panel">
-        <div class="head"><div><h2 class="section-title">재고 불일치 수동 신고</h2>
-          <p class="subtext">센서 연결 전에도 관리자 확인 사항을 기록할 수 있습니다.</p></div></div>
-        <div class="formgrid">
-          <div class="field"><label for="reportRack">보관함 ID</label><input id="reportRack" class="input" maxlength="32" placeholder="예: MAIN-1" value="MAIN-1"></div>
-          <div class="field wide"><label for="reportDetail">확인 내용</label><textarea id="reportDetail" maxlength="500" rows="3" placeholder="예: 1층 우산함에서 실제 우산 수량이 시스템과 일치하지 않음"></textarea></div>
-        </div>
-        <div class="actions"><button type="button" class="btn primary" id="reportIncident">재고 이상 기록</button></div>
-        <div id="securityMessage" class="msg hide" role="status"></div>
-        <p class="helper">현재 하드웨어가 연결되지 않았다면 실제 무단 반출 자동 감지는 불가능합니다. 추후 인증된 무게센서 장치가 안정된 측정값을 서버에 전달하면 의심 알림이 생성될 수 있습니다.</p>
-      </section>
     </div>
     <div id="inventory" class="tab">
       <section class="panel">
@@ -239,9 +202,8 @@ const $=id=>document.getElementById(id);
 const N={AVAILABLE:"대여 가능",BORROWED:"대여 중",LOST:"분실",DAMAGED:"파손",DISPOSED:"폐기"};
 const A={REGISTER:"신규 등록",BORROW:"대여",RETURN:"반납",LOST:"분실 처리",DAMAGED:"파손 처리",DISPOSED:"폐기 처리",RESTORE:"복구"};
 const colors={AVAILABLE:"#31b17c",BORROWED:"#5287ee",LOST:"#ef6a74",DAMAGED:"#e6b44e",DISPOSED:"#a6aab4"};
-const titles={security:["안전 알림","무단 반출 의심 및 재고 불일치 내역을 관리합니다."],dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."]};
+const titles={dashboard:["대시보드","학교 우산 현황을 한눈에 확인하세요."],inventory:["우산 관리","우산 상태를 확인하고 처리할 수 있습니다."],history:["대여 기록","대여·반납·상태 변경 이력을 확인하세요."],settings:["관리 도구","데이터 백업과 서비스 접근 메뉴입니다."],studentPolicy:["학생·패널티 관리","월별 대여 횟수와 분실·파손 패널티를 관리합니다."]};
 let csrf="",currentUser="",inventory=[],events=[],busy=false;
-let lastSecurityAlertIds=null,securityAlertsLoading=false;
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
 async function api(path,{method="GET",body,auth=false}={}){
  const headers={};if(body!==undefined)headers["Content-Type"]="application/json";if(auth)headers["X-CSRF-Token"]=csrf;
@@ -282,90 +244,9 @@ function renderEvents(){
  const rows=events.filter(x=>(!f||x.action===f)&&(!q||[x.umbrella_id,x.student_id,x.actor,x.reason].some(v=>String(v||"").toLowerCase().includes(q))));
  $("eventRows").innerHTML=rows.map(e=>'<tr><td>'+esc(new Date(e.created_at).toLocaleString("ko-KR"))+'</td><td><strong>'+esc(e.umbrella_id)+'</strong></td><td>'+esc(A[e.action]||e.action)+'</td><td>'+esc(e.student_id||"—")+'</td><td>'+esc(e.actor)+'</td><td>'+esc(e.reason||"—")+'</td></tr>').join("")||empty(6,"조건에 맞는 기록이 없습니다.");
 }
-function securityMsg(msg,error=false){
- const el=$("securityMessage");el.className="msg"+(error?" error":"");el.textContent=msg;
-}
-function renderSecurity(data){
- const count=data.open_count;
- $("navAlertCount").textContent=String(count);
- $("navAlertCount").classList.toggle("hide",count===0);
- $("securityBanner").classList.toggle("hide",count===0);
- $("securityBannerText").textContent=count+"건의 확인되지 않은 안전 알림이 있습니다.";
- $("securityState").textContent=count?("확인 대기 "+count+"건 · 원인 조사 후 처리 완료로 변경해 주세요."):"현재 확인 대기 중인 알림이 없습니다.";
- $("securityState").classList.toggle("security-warning",count>0);
- const rows=data.alerts;
- $("securityRows").innerHTML=rows.map(a=>
-  '<article class="security-entry '+(a.status==="OPEN"?"security-open":"")+'">'+
-  '<div class="security-entry-head"><strong>'+esc(a.source==="SENSOR"?"무게 변화 감지":"관리자 재고 이상 신고")+'</strong>'+
-  '<span class="security-state">'+(a.status==="OPEN"?"확인 대기":"처리 완료")+'</span></div>'+
-  '<p>'+esc(a.detail)+'</p>'+
-  '<div class="security-meta">보관함: '+esc(a.rack_id)+
-  (a.drop_grams!==null?' · 감소: '+esc(a.drop_grams)+'g':'')+
-  ' · '+esc(new Date(a.created_at).toLocaleString("ko-KR"))+'</div>'+
-  (a.status==="OPEN"?'<button class="btn" type="button" data-resolve-alert="'+a.id+'">확인 후 처리 완료</button>':
-   '<div class="security-meta">처리: '+esc(a.resolved_by||"—")+' · '+esc(a.resolution||"—")+'</div>')+
-  '</article>').join("")||'<p class="helper">기록된 안전 알림이 없습니다.</p>';
- for(const btn of $("securityRows").querySelectorAll("[data-resolve-alert]")){
-  btn.onclick=()=>resolveSecurityAlert(Number(btn.dataset.resolveAlert));
- }
-}
-async function loadSecurityAlerts(){
- if(!csrf||securityAlertsLoading)return;
- securityAlertsLoading=true;
- try{
-  const data=await api("/api/admin/security-alerts");
-  const open=data.alerts.filter(a=>a.status==="OPEN");
-  const ids=new Set(open.map(a=>a.id));
-  if(lastSecurityAlertIds!==null&&"Notification" in window&&Notification.permission==="granted"){
-   const newOnes=open.filter(a=>!lastSecurityAlertIds.has(a.id));
-   if(newOnes.length){
-    try{new Notification("계성 우산 · 안전 알림",{body:newOnes.length+"건의 새 무단 반출 의심/재고 이상 알림이 있습니다."});}
-    catch(e){console.warn("Browser notification unavailable",e);}
-   }
-  }
-  lastSecurityAlertIds=ids;
-  renderSecurity(data);
- }catch(error){$("securityState").textContent="알림 조회 실패: "+error.message;}
- finally{securityAlertsLoading=false;}
-}
-async function resolveSecurityAlert(id){
- const resolution=prompt("실제 현장 확인 결과와 처리 사유를 적어 주세요.\n확인되지 않은 학생에게 책임을 돌리지 마세요.");
- if(resolution===null)return;
- if(resolution.trim().length<5)return securityMsg("처리 사유는 최소 5자 이상 작성해 주세요.",true);
- try{
-  await api("/api/admin/security-alerts/"+id+"/resolve",
-    {method:"POST",auth:true,body:{resolution:resolution.trim()}});
-  securityMsg("알림 #"+id+" 처리 완료. 이력은 삭제되지 않습니다.");
-  await loadSecurityAlerts();
- }catch(error){securityMsg(error.message,true);}
-}
-$("goSecurity").onclick=()=>changeTab("security");
-$("refreshSecurity").onclick=loadSecurityAlerts;
-$("enableBrowserAlerts").onclick=async()=>{
- if(!("Notification" in window))return securityMsg("현재 브라우저에서 알림을 지원하지 않습니다.",true);
- try{
-  const permission=await Notification.requestPermission();
-  securityMsg(permission==="granted"?"브라우저 알림이 활성화되었습니다. 관리자 화면이 열려 있을 때만 알림을 받을 수 있습니다.":"알림 권한이 허용되지 않았습니다.",permission!=="granted");
- }catch(error){securityMsg("알림 권한 요청 실패: "+error.message,true);}
-};
-$("reportIncident").onclick=async()=>{
- const rack_id=$("reportRack").value.trim(),detail=$("reportDetail").value.trim();
- if(!/^[A-Za-z0-9_-]{1,32}$/.test(rack_id)||detail.length<5)return securityMsg("보관함 ID와 5자 이상의 상황 설명이 필요합니다.",true);
- if(!confirm("재고 이상 신고를 등록하시겠습니까? 실제 도난 사실을 확정하는 것은 아닙니다."))return;
- const button=$("reportIncident");button.disabled=true;
- try{
-  await api("/api/admin/security-alerts",{method:"POST",auth:true,body:{rack_id,detail}});
-  $("reportDetail").value="";
-  securityMsg("재고 이상 신고가 기록되었습니다.");
-  await loadSecurityAlerts();
- }catch(error){securityMsg("신고 실패: "+error.message,true);}
- finally{button.disabled=false;}
-};
-window.setInterval(()=>{if(csrf&&document.visibilityState==="visible")loadSecurityAlerts();},15000);
 async function refresh(){
  const [i,e]=await Promise.all([api("/api/admin/inventory"),api("/api/admin/events")]);
  inventory=i;events=e;renderStats();renderInventory();renderEvents();
- await loadSecurityAlerts();
  $("penaltyUmbrella").innerHTML='<option value="">미지정</option>'+inventory.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.id)+' · '+N[x.status]+'</option>').join("");
 }
 async function authed(){
@@ -380,7 +261,7 @@ $("loginForm").onsubmit=async ev=>{
 };
 $("logout").onclick=async()=>{
  try{await api("/api/admin/logout",{method:"POST",auth:true});}catch(e){console.warn(e);}
- csrf="";inventory=[];events=[];lastSecurityAlertIds=null;$("studentPinOutput").textContent="";show(false);
+ csrf="";inventory=[];events=[];$("studentPinOutput").textContent="";show(false);
 };
 $("refresh").onclick=async()=>{try{await refresh();}catch(e){alert("새로고침 실패: "+e.message);}};
 // Student lookup uses admin-authenticated inventory data only.
