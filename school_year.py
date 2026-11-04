@@ -241,6 +241,13 @@ def _canonical_transition(c, year, entries):
             if not isinstance(new,str):
                 raise HTTPException(422,"승급 대상 학생에게는 새 학년·반·번호가 필요합니다.")
             validate_label(new)
+            old_grade=int(old.split("-")[0])
+            new_grade=int(new.split("-")[0])
+            if old_grade==6 or new_grade!=old_grade+1:
+                raise HTTPException(
+                    422,"일괄 승급은 정확히 한 학년 올라가는 배정만 가능합니다. "
+                        "6학년은 졸업·전출 처리하고, 예외적인 유급·복학은 개별 배정으로 처리해 주세요."
+                )
             if new in seen_new:
                 raise HTTPException(422,"새 학년도 학년·반·번호가 중복됐습니다: "+new)
             seen_new.add(new)
