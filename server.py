@@ -914,7 +914,8 @@ def home():
 @app.get("/staff", include_in_schema=False)
 @app.get("/staff/", include_in_schema=False)
 def staff_page():
-    return FileResponse(ROOT / "staff.html", headers={"Cache-Control": "no-store"})
+    """Backward-compatible path: use the same unified kiosk without a separate staff UI."""
+    return Response(status_code=307,headers={"Location":"/","Cache-Control":"no-store"})
 
 
 @app.get("/admin", include_in_schema=False)
