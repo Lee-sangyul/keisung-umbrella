@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 import segno
+import school_year as academic
 
 ROOT = Path(__file__).resolve().parent
 load_dotenv(ROOT / ".env", override=True)  # .env is authoritative for this single-instance MVP.
@@ -217,6 +218,7 @@ def init_db():
     with transaction() as c:
         c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('monthly_limit',10)")
         c.execute("INSERT OR IGNORE INTO policies(key,value) VALUES('rental_days',7)")
+        academic.init_identity(c,datetime.now(timezone.utc).isoformat())
         # Give existing active rentals a fresh grace period from first upgrade:
         # old loans never had a promised due date, so avoid retroactive overdue.
         migration_time = datetime.now(timezone.utc)
@@ -261,9 +263,10 @@ def parse_id(value):
     return int(value.split("-")[1])
 
 
-def log(c, umbrella_id, action, student=None, rental=None, actor="system", reason=""):
-    c.execute("INSERT INTO events(umbrella_id,action,student_id,rental_id,actor,reason,created_at) VALUES(?,?,?,?,?,?,?)",
-              (umbrella_id, action, student, rental, actor, reason, now()))
+def log(c, umbrella_id, action, student=None, rental=None, actor="system", reason="",student_uid=None):
+    c.execute("""INSERT INTO events(umbrella_id,action,student_id,rental_id,actor,reason,created_at,student_uid)
+                 VALUES(?,?,?,?,?,?,?,?)""",
+              (umbrella_id, action, student, rental, actor, reason, now(),student_uid))
 
 
 def verify_origin(request: Request):
@@ -398,8 +401,9 @@ def student_pin_hash(pin: str, salt: bytes) -> bytes:
 def check_student_pin(c, student: str, pin: str) -> str:
     """Return ok/invalid/locked. Never throw inside transaction or failed-attempt updates roll back."""
     current = int(time.time())
+    stable_id = academic.resolve_student(c,student)
     row = c.execute(
-        "SELECT * FROM student_pins WHERE student_id=?", (student,)
+        "SELECT * FROM student_credentials WHERE student_uid=?", (stable_id,)
     ).fetchone()
     if row and row["locked_until"] > current:
         return "locked"
@@ -408,16 +412,16 @@ def check_student_pin(c, student: str, pin: str) -> str:
     if row and hmac.compare_digest(hashed, row["pin_hash"]):
         if row["failed_attempts"] or row["locked_until"]:
             c.execute(
-                "UPDATE student_pins SET failed_attempts=0,last_failed_at=0,locked_until=0 WHERE student_id=?",
-                (student,)
+                "UPDATE student_credentials SET failed_attempts=0,last_failed_at=0,locked_until=0 WHERE student_uid=?",
+                (stable_id,)
             )
         return "ok"
     if row:
         failures = (row["failed_attempts"] if current - row["last_failed_at"] < 900 else 0) + 1
         lock = current + 900 if failures >= 5 else 0
         c.execute(
-            "UPDATE student_pins SET failed_attempts=?,last_failed_at=?,locked_until=? WHERE student_id=?",
-            (failures, current, lock, student)
+            "UPDATE student_credentials SET failed_attempts=?,last_failed_at=?,locked_until=? WHERE student_uid=?",
+            (failures, current, lock, stable_id)
         )
         if lock:
             return "locked"
