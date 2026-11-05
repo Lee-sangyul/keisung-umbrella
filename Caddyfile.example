@@ -1,0 +1,6 @@
+# Requires a public server with DNS A record for keisungschool.tech.
+# Caddy runs on the same host as docker compose's 127.0.0.1:8000 port.
+keisungschool.tech {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8000
+}

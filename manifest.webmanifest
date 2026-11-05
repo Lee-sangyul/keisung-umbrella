@@ -1,0 +1,31 @@
+{
+  "name": "계성 우산 대여",
+  "short_name": "계성 우산",
+  "description": "계성 우산 대여 및 반납 관리",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "lang": "ko",
+  "dir": "ltr",
+  "theme_color": "#ff6541",
+  "background_color": "#fff9f5",
+  "categories": [
+    "education",
+    "utilities"
+  ],
+  "icons": [
+    {
+      "src": "/assets/pwa-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/pwa-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ]
+}

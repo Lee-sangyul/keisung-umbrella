@@ -385,3 +385,23 @@ SQLite 온라인 백업 API가 커밋된 WAL 데이터를 포함해 단일 DB �
 - [ ] 시범 운영과 오류 보고·관리 책임자 지정 후 최종 오픈 승인
 
 주의: 코드만 롤백하고 SQLite DB 스키마가 변경되면 구버전 호환성이 깨질 수 있습니다. 배포 전 백업 후 변경하세요.
+
+
+## 설치형 웹앱 (PWA) 및 keisungschool.tech 운영 안내
+
+- Chrome/Android/Chromebook에서는 HTTPS 접속 후 브라우저의 **앱 설치** 메뉴를 사용합니다. 설치 프롬프트가 제공되는 환경에서는 화면 하단에 설치 버튼이 나타날 수 있습니다. iPhone은 공유 메뉴에서 홈 화면에 추가할 수 있습니다.
+- `/manifest.webmanifest`, `/sw.js`, 192/512 PNG 앱 아이콘을 동일한 HTTPS 출처에서 제공합니다.
+- 보안상 서비스 워커는 API, 학생 기록, 관리자 화면, 인증 응답을 **캐시하지 않습니다**. 오프라인에서 대여/반납은 지원하지 않으며 항상 서버 연결이 필요합니다.
+- 이 버전은 설치 가능한 웹앱 **기반**입니다. **대여·반납 푸시 알림은 아직 구현하지 않았습니다.** 추후 수신 동의, 학생 인증, VAPID 키, 서버 측 발송 스케줄러 설계가 필요합니다.
+
+### 도메인 + 상시 운영 서버
+
+1. [GitHub Student Developer Pack](https://education.github.com/pack/) .TECH 혜택에서 `keisungschool.tech`를 검색해 실제 구매 가능/갱신가를 확인하고, 등록자 본인 또는 보호자와 함께 결제/등록합니다.
+2. 학교 명칭을 사용하는 공식 공개 서비스인 경우 학교의 도메인·브랜딩·학생 데이터 처리 승인을 받습니다.
+3. 상시 실행되는 서버의 공인 IP에 DNS A(및 IPv6를 운영할 경우 AAAA) 레코드를 연결합니다.
+4. 해당 서버에서 `docker compose --env-file .env up -d --build` 또는 배포 환경에 맞게 실행합니다. 현재 compose는 127.0.0.1:8000에만 바인딩됩니다.
+5. 같은 호스트에 Caddy를 설치하고 저장소의 `Caddyfile.example`을 실제 Caddyfile로 설정합니다. 80/443 포트 개방 및 DNS 전파 후 HTTPS가 발급되는지 확인합니다.
+6. `.env` 파일에서 `DEPLOYMENT_MODE=production`, `APP_ORIGIN=https://keisungschool.tech`, `SECURE_COOKIES=true`, 강력한 `ADMIN_PASSWORD`, `ALLOW_STUDENT_SELF_ENROLLMENT=false`를 설정합니다. `.env`는 절대 Git에 올리지 않습니다.
+7. `/healthz` 확인, 관리자 로그인·권한, 대여·반납, QR, DB 백업과 복원 테스트를 수행하고 공개 범위를 승인받습니다.
+
+> 주의: 도메인만 등록해서 Codespaces URL이 영구 변경되거나 서버가 상시 실행되는 것은 아닙니다. Codespaces는 개발/시연 용도로만 사용하세요.

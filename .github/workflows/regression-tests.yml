@@ -23,9 +23,9 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pytest httpx
       - name: Validate Python syntax
-        run: python -m compileall -q backup_db.py tests/test_deployment.py reset_db.py tests/test_reset_db.py server.py school_year.py tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py tests/test_academic_year.py
+        run: python -m compileall -q backup_db.py tests/test_deployment.py reset_db.py tests/test_reset_db.py server.py school_year.py tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py tests/test_academic_year.py tests/test_pwa.py
       - name: Run regression suite
-        run: pytest -q tests/test_deployment.py tests/test_reset_db.py tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py tests/test_academic_year.py
+        run: pytest -q tests/test_deployment.py tests/test_reset_db.py tests/test_student_pin.py tests/test_rental_due.py tests/test_stocktake.py tests/test_staff.py tests/test_academic_year.py tests/test_pwa.py
       - name: Verify single kiosk interaction flow
         run: node tests/unified_kiosk_ui.cjs
       - name: Build production Docker image

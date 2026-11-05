@@ -102,7 +102,11 @@
 .academic-preview{background:#fffaf8;border:1px solid #efcfbf;border-radius:12px;padding:18px;margin:16px 0}
 .academic-preview h3{margin:0 0 10px;font-size:18px}
 #academicPreviewStats{font-weight:800}
-</style></head><body>
+</style><link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="192x192" href="/assets/pwa-icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+</head><body>
 <div id="loginScreen" class="login-wrap">
   <div class="login"><a href="/" class="logo"><img src="/assets/keisung-icon-64.png" alt="">계성 우산</a><h1>관리자 로그인</h1><p>우산 운영 대시보드에 로그인하세요.</p>
   <form id="loginForm"><div class="field"><label for="username">관리자 아이디</label><input class="input" id="username" required autocomplete="username"></div><div class="field"><label for="password">비밀번호</label><input class="input" type="password" id="password" required autocomplete="current-password"></div><button class="btn primary" type="submit">관리자 로그인</button></form>
@@ -1217,4 +1221,5 @@ async function reverseStudentPenalty(id){
 }
 
 authed();
-</script></body></html>
+</script><script src="/assets/pwa-install.js" defer></script>
+</body></html>
