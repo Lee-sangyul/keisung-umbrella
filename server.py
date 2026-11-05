@@ -1060,6 +1060,21 @@ def reverse_penalty(penalty_id: int,data: ReversePenaltyRequest,request: Request
     return {"ok":True,"penalty_points":total}
 
 
+@app.get("/manifest.webmanifest", include_in_schema=False)
+def pwa_manifest():
+    return FileResponse(ROOT / "manifest.webmanifest",
+                        media_type="application/manifest+json",
+                        headers={"Cache-Control": "public, max-age=300"})
+
+
+@app.get("/sw.js", include_in_schema=False)
+def pwa_service_worker():
+    return FileResponse(ROOT / "sw.js",
+                        media_type="text/javascript; charset=utf-8",
+                        headers={"Cache-Control": "no-cache",
+                                 "Service-Worker-Allowed": "/"})
+
+
 @app.get("/", include_in_schema=False)
 def home():
     return FileResponse(ROOT / "kiosk.html", headers={"Cache-Control": "no-store"})

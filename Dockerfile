@@ -5,7 +5,7 @@ RUN groupadd --gid 10001 umbrella && useradd --uid 10001 --gid umbrella --no-cre
 COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt
 COPY server.py school_year.py backup_db.py reset_db.py ./
-COPY kiosk.html index.html print.html ./
+COPY kiosk.html index.html print.html manifest.webmanifest sw.js ./
 COPY assets ./assets
 RUN mkdir -p /app/data && chown -R umbrella:umbrella /app/data
 USER umbrella
